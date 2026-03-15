@@ -231,6 +231,8 @@ adk-rust = {{ path = "{adk_rust}/adk-rust" }}
                             && !trimmed.starts_with("Updating ")
                             && !trimmed.starts_with("Locking ")
                             && !trimmed.starts_with("warning: unused")
+                            && !trimmed.starts_with("warning: `playground-run`")
+                            && !trimmed.contains("generated 1 warning")
                     })
                     .collect::<Vec<_>>()
                     .join("\n")
@@ -300,18 +302,15 @@ fn weather_tool() -> FunctionTool {
     FunctionTool::new(
         "get_weather",
         "Get current weather for a city",
-        |args: serde_json::Value| {
-            Box::pin(async move {
-                let city = args["city"].as_str().unwrap_or("unknown");
-                Ok(serde_json::json!({
-                    "city": city,
-                    "temp": "22°C",
-                    "condition": "Sunny"
-                }))
-            })
+        |_ctx: Arc<dyn ToolContext>, args: serde_json::Value| async move {
+            let city = args["city"].as_str().unwrap_or("unknown");
+            Ok(serde_json::json!({
+                "city": city,
+                "temp": "22°C",
+                "condition": "Sunny"
+            }))
         },
     )
-    .with_parameter("city", "string", "City name", true)
 }
 
 #[tokio::main]
@@ -324,10 +323,10 @@ async fn main() -> anyhow::Result<()> {
     let agent = LlmAgentBuilder::new("weather_agent")
         .instruction("You help users check the weather.")
         .model(model)
-        .tool(weather_tool())
+        .tool(Arc::new(weather_tool()))
         .build()?;
 
-    println!("Agent '{}' with {} tool(s) ready!", agent.name(), 1);
+    println!("Agent '{}' with tool 'get_weather' ready!", agent.name());
     Ok(())
 }"#.into(),
         },
@@ -374,36 +373,59 @@ async fn main() -> anyhow::Result<()> {
             name: "Graph Agent".into(),
             category: "Graph".into(),
             description: "Stateful graph-based agent with conditional routing".into(),
-            code: r#"use adk_rust::prelude::*;
-use adk_rust::graph::*;
-use std::sync::Arc;
+            code: r#"use adk_rust::graph::{StateGraph, NodeOutput, START, END};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-    let api_key = std::env::var("GOOGLE_API_KEY")
-        .unwrap_or_else(|_| "demo-key".into());
-    let model = Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?);
-
-    let graph = GraphBuilder::new("classifier")
-        .add_llm_node("analyze", model.clone(),
-            "Classify the input as 'positive', 'negative', or 'neutral'.")
-        .add_llm_node("respond_positive", model.clone(),
-            "Generate an enthusiastic response.")
-        .add_llm_node("respond_negative", model.clone(),
-            "Generate an empathetic response.")
-        .add_llm_node("respond_neutral", model,
-            "Generate a balanced response.")
-        .set_entry("analyze")
-        .add_conditional_edge("analyze", |state| {
-            let text = state.get_last_text().unwrap_or_default().to_lowercase();
-            if text.contains("positive") { "respond_positive".into() }
-            else if text.contains("negative") { "respond_negative".into() }
-            else { "respond_neutral".into() }
+    let graph = StateGraph::with_channels(&["input", "output", "sentiment"])
+        .add_node_fn("analyze", |ctx| async move {
+            let input = ctx.state.get("input")
+                .and_then(|v| v.as_str())
+                .unwrap_or("neutral text");
+            let sentiment = if input.contains("great") || input.contains("love") {
+                "positive"
+            } else if input.contains("bad") || input.contains("hate") {
+                "negative"
+            } else {
+                "neutral"
+            };
+            Ok(NodeOutput::new()
+                .with_update("sentiment", sentiment))
         })
-        .build()?;
+        .add_node_fn("respond_positive", |_ctx| async move {
+            Ok(NodeOutput::new()
+                .with_update("output", "That's wonderful to hear! 🎉"))
+        })
+        .add_node_fn("respond_negative", |_ctx| async move {
+            Ok(NodeOutput::new()
+                .with_update("output", "I'm sorry to hear that. How can I help?"))
+        })
+        .add_node_fn("respond_neutral", |_ctx| async move {
+            Ok(NodeOutput::new()
+                .with_update("output", "Thanks for sharing. Tell me more."))
+        })
+        .add_edge(START, "analyze")
+        .add_conditional_edges(
+            "analyze",
+            |state| {
+                state.get("sentiment")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("neutral")
+                    .to_string()
+            },
+            [
+                ("positive", "respond_positive"),
+                ("negative", "respond_negative"),
+                ("neutral", "respond_neutral"),
+            ],
+        )
+        .add_edge("respond_positive", END)
+        .add_edge("respond_negative", END)
+        .add_edge("respond_neutral", END)
+        .compile()?;
 
-    println!("Graph '{}' built with conditional routing!", graph.name());
+    println!("Graph compiled with {} nodes and conditional routing!", graph.schema().channels.len());
+    println!("Entry nodes: {:?}", graph.get_entry_nodes());
     Ok(())
 }"#.into(),
         },
@@ -416,6 +438,7 @@ async fn main() -> anyhow::Result<()> {
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 struct MovieReview {
     title: String,
@@ -431,10 +454,21 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| "demo-key".into());
     let model = Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?);
 
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "title": { "type": "string" },
+            "rating": { "type": "number" },
+            "summary": { "type": "string" },
+            "recommended": { "type": "boolean" }
+        },
+        "required": ["title", "rating", "summary", "recommended"]
+    });
+
     let agent = LlmAgentBuilder::new("reviewer")
         .instruction("You review movies. Always respond with structured JSON.")
         .model(model)
-        .output_schema::<MovieReview>()
+        .output_schema(schema)
         .build()?;
 
     println!("Structured output agent '{}' ready!", agent.name());

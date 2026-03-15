@@ -1,0 +1,15 @@
+[package]
+name = "launcher_test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "launcher_test_basic"
+path = "src/basic.rs"
+
+[dependencies]
+adk-rust = { workspace = true }
+adk-core = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+dotenvy = "0.15"

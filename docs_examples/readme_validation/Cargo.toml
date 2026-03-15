@@ -1,0 +1,67 @@
+[package]
+name = "readme_validation"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "gemini_basic"
+path = "src/gemini_basic.rs"
+
+[[bin]]
+name = "openai_basic"
+path = "src/openai_basic.rs"
+
+[[bin]]
+name = "anthropic_basic"
+path = "src/anthropic_basic.rs"
+
+[[bin]]
+name = "deepseek_basic"
+path = "src/deepseek_basic.rs"
+
+[[bin]]
+name = "groq_basic"
+path = "src/groq_basic.rs"
+
+[[bin]]
+name = "ollama_basic"
+path = "src/ollama_basic.rs"
+
+[[bin]]
+name = "realtime_snippet"
+path = "src/realtime_snippet.rs"
+
+[[bin]]
+name = "graph_snippet"
+path = "src/graph_snippet.rs"
+
+[[bin]]
+name = "browser_snippet"
+path = "src/browser_snippet.rs"
+
+[[bin]]
+name = "eval_snippet"
+path = "src/eval_snippet.rs"
+
+[[bin]]
+name = "ui_snippet"
+path = "src/ui_snippet.rs"
+
+[[bin]]
+name = "mistralrs_snippet"
+path = "src/mistralrs_snippet.rs"
+
+[dependencies]
+adk-rust = { workspace = true, features = ["openai", "anthropic", "deepseek", "groq", "ollama", "graph"] }
+adk-ui = { workspace = true }
+adk-realtime = { workspace = true, features = ["openai"] }
+adk-eval = { workspace = true }
+adk-browser = { workspace = true }
+adk-agent = { workspace = true }
+adk-model = { workspace = true, features = ["gemini"] }
+adk-graph = { workspace = true }
+adk-core = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+dotenvy = "0.15"
+serde_json = "1"
+anyhow = "1"

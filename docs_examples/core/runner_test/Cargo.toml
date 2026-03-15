@@ -1,0 +1,18 @@
+[package]
+name = "runner_test"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "runner_test_basic"
+path = "src/basic.rs"
+
+[dependencies]
+adk-runner = { workspace = true }
+adk-session = { workspace = true }
+adk-artifact = { workspace = true }
+adk-core = { workspace = true }
+adk-agent = { workspace = true }
+adk-model = { workspace = true, features = ["gemini"] }
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"

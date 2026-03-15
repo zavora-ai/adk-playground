@@ -1,0 +1,13 @@
+# Build artifacts
+**/target/
+target/
+
+# Dependencies
+**/node_modules/
+
+# Build output
+**/dist/
+
+# Environment
+.env
+.DS_Store

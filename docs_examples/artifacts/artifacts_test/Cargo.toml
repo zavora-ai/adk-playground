@@ -1,0 +1,34 @@
+[package]
+name = "artifacts_test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "artifacts_test_basic"
+path = "src/basic.rs"
+
+[[bin]]
+name = "scoped"
+path = "src/scoped.rs"
+
+[[bin]]
+name = "image_analysis"
+path = "src/image_analysis.rs"
+
+[[bin]]
+name = "csv_analysis"
+path = "src/csv_analysis.rs"
+
+[[bin]]
+name = "pdf_analysis"
+path = "src/pdf_analysis.rs"
+
+[dependencies]
+adk-rust = { workspace = true }
+adk-artifact = { workspace = true }
+adk-core = { workspace = true }
+adk-cli = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+dotenvy = "0.15"

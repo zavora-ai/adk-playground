@@ -1,0 +1,29 @@
+[package]
+name = "mcp_test"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.0"
+publish = false
+
+[dependencies]
+adk-rust = { workspace = true }
+adk-tool = { workspace = true }
+adk-core = { workspace = true }
+adk-cli = { workspace = true }
+rmcp = { version = "0.15", features = ["client", "transport-child-process"] }
+tokio = { version = "1", features = ["full"] }
+dotenvy = "0.15"
+anyhow = "1.0"
+async-trait = "0.1"
+
+[[bin]]
+name = "mcp_test_basic"
+path = "src/basic.rs"
+
+[[bin]]
+name = "filtered"
+path = "src/filtered.rs"
+
+[[bin]]
+name = "task_support"
+path = "src/task_support.rs"

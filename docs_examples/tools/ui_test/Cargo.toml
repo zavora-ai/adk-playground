@@ -1,0 +1,23 @@
+[package]
+name = "ui_test"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.0"
+publish = false
+
+
+[dependencies]
+adk-rust = { workspace = true }
+adk-ui = { workspace = true }
+adk-cli = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+dotenvy = "0.15"
+anyhow = "1.0"
+
+[[bin]]
+name = "ui_agent"
+path = "src/ui_agent.rs"
+
+[[bin]]
+name = "ui_server"
+path = "src/ui_server.rs"

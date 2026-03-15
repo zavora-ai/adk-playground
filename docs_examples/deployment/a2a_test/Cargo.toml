@@ -1,0 +1,25 @@
+[package]
+name = "a2a_test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "server"
+path = "src/server.rs"
+
+[[bin]]
+name = "client"
+path = "src/client.rs"
+
+[dependencies]
+adk-rust = { workspace = true }
+adk-core = { workspace = true }
+adk-server = { workspace = true }
+adk-session = { workspace = true }
+adk-cli = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+uuid = { version = "1", features = ["v4"] }
+serde_json = "1"
+dotenvy = "0.15"

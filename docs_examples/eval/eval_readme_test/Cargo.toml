@@ -1,0 +1,14 @@
+[package]
+name = "eval_readme_test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "eval_readme_test_basic"
+path = "src/basic.rs"
+
+[dependencies]
+adk-eval = { workspace = true }
+adk-core = { workspace = true }
+tokio = { version = "1", features = ["full"] }

@@ -1,0 +1,15 @@
+[package]
+name = "guardrail_readme_test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "guardrail_readme_test_basic"
+path = "src/basic.rs"
+
+[dependencies]
+adk-guardrail = { workspace = true }
+adk-agent = { workspace = true, features = ["guardrails"] }
+adk-core = { workspace = true }
+tokio = { version = "1", features = ["full"] }

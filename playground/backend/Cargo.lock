@@ -7,6 +7,7 @@ name = "adk-playground-server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "dotenvy",
  "serde",
  "serde_json",
  "tokio",
@@ -88,6 +89,12 @@ name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+
+[[package]]
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "errno"

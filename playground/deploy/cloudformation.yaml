@@ -167,8 +167,8 @@ Resources:
             systemctl enable --now caddy
 
             echo "=== Pre-warming compilation cache ==="
-            mkdir -p /tmp/adk-playground-workspace/src
-            cat > /tmp/adk-playground-workspace/Cargo.toml <<EOF
+            mkdir -p /var/tmp/adk-playground-workspace/src
+            cat > /var/tmp/adk-playground-workspace/Cargo.toml <<EOF
             [package]
             name = "playground-run"
             version = "0.1.0"
@@ -185,8 +185,8 @@ Resources:
             dotenvy = "0.15"
             tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
             EOF
-            echo 'fn main() { println!("warm"); }' > /tmp/adk-playground-workspace/src/main.rs
-            cd /tmp/adk-playground-workspace
+            echo 'fn main() { println!("warm"); }' > /var/tmp/adk-playground-workspace/src/main.rs
+            cd /var/tmp/adk-playground-workspace
             cargo build 2>&1 || true
             echo "=== Setup Complete $(date) ==="
 

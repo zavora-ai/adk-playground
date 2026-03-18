@@ -574,7 +574,7 @@ async fn main() {
     let mode = if is_public_mode() { "public" } else { "local" };
 
     let state = AppState {
-        workspace_dir: std::env::temp_dir().join("adk-playground-workspace"),
+        workspace_dir: PathBuf::from("/var/tmp/adk-playground-workspace"),
         build_lock: Arc::new(Mutex::new(())),
     };
 

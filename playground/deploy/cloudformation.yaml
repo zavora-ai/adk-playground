@@ -104,7 +104,7 @@ Resources:
             aws ec2 associate-address --instance-id "$INSTANCE_ID" --allocation-id "${ElasticIP.AllocationId}" --region ${AWS::Region} || true
 
             dnf update -y
-            dnf install -y gcc openssl-devel pkg-config git
+            dnf install -y gcc openssl-devel pkg-config git dbus-devel
 
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
             export PATH="/root/.cargo/bin:$PATH"

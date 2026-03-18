@@ -89,7 +89,7 @@ Resources:
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
-              VolumeSize: 20
+              VolumeSize: 30
               VolumeType: gp3
               DeleteOnTermination: true
         UserData:
@@ -106,7 +106,7 @@ Resources:
             dnf update -y
             dnf install -y gcc openssl-devel pkg-config git
 
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.91.1
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
             export PATH="/root/.cargo/bin:$PATH"
 
             # Install Caddy from binary

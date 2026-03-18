@@ -5,8 +5,8 @@ target/
 # Dependencies
 **/node_modules/
 
-# Build output
-**/dist/
+# Build output (frontend dist is checked in for deployment)
+!playground/frontend/dist/
 
 # Environment
 .env

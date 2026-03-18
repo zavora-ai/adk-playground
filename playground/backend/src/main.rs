@@ -1,3 +1,5 @@
+mod examples;
+
 use axum::{
     Router,
     extract::Json,
@@ -18,7 +20,6 @@ use tower_http::services::ServeDir;
 struct RunRequest {
     code: String,
     #[serde(default = "default_example")]
-    #[allow(dead_code)]
     example_id: String,
 }
 
@@ -32,127 +33,159 @@ struct RunResponse {
     stdout: String,
     stderr: String,
     duration_ms: u64,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    traces: Vec<TraceEvent>,
 }
 
 #[derive(Serialize, Clone)]
-struct Example {
-    id: String,
+struct TraceEvent {
+    timestamp_ms: u64,
+    level: String,
     name: String,
-    category: String,
-    description: String,
-    code: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+    kind: String, // "agent", "llm", "tool_call", "tool_result", "info", "warn"
+    #[serde(skip_serializing_if = "String::is_empty")]
+    target: String,
+}
+
+/// Returns true if the server is in public (restricted) mode.
+/// In public mode, only registered examples can be executed.
+fn is_public_mode() -> bool {
+    std::env::var("PLAYGROUND_MODE")
+        .map(|v| v.eq_ignore_ascii_case("public"))
+        .unwrap_or(false)
 }
 
 async fn health() -> &'static str {
     "ok"
 }
 
-async fn list_examples() -> Json<Vec<Example>> {
-    Json(get_examples())
+async fn list_examples() -> Json<Vec<examples::Example>> {
+    Json(examples::load_examples())
+}
+
+/// Resolve the code to execute. In public mode, only registered examples are allowed.
+/// Returns Ok(code) or Err(response) if rejected.
+fn resolve_code(req: &RunRequest) -> Result<String, RunResponse> {
+    if is_public_mode() {
+        // Public mode: only allow registered examples
+        let examples = examples::load_examples();
+        if let Some(ex) = examples.iter().find(|e| e.id == req.example_id) {
+            Ok(ex.code.clone())
+        } else {
+            Err(RunResponse {
+                success: false,
+                stdout: String::new(),
+                stderr: "Public mode: only registered examples can be executed. \
+                         Select an example from the sidebar."
+                    .into(),
+                duration_ms: 0,
+                traces: Vec::new(),
+            })
+        }
+    } else {
+        // Local mode: run whatever code the user sends
+        Ok(req.code.clone())
+    }
 }
 
 async fn run_code(
     state: axum::extract::State<AppState>,
     Json(req): Json<RunRequest>,
 ) -> impl IntoResponse {
+    // Resolve code (enforces public mode restrictions)
+    let code = match resolve_code(&req) {
+        Ok(c) => c,
+        Err(resp) => return (StatusCode::OK, Json(resp)),
+    };
+
     let workspace = &state.workspace_dir;
-    // Serialize builds — only one at a time to avoid cargo lock conflicts
     let _lock = state.build_lock.lock().await;
 
-    // Ensure persistent workspace exists with Cargo.toml
+    // Create workspace with Cargo.toml on first run
     if !workspace.join("Cargo.toml").exists() {
         if let Err(e) = tokio::fs::create_dir_all(workspace.join("src")).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(RunResponse {
-                success: false,
-                stdout: String::new(),
-                stderr: format!("Failed to create workspace: {}", e),
-                duration_ms: 0,
-            }));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(RunResponse {
+                    success: false,
+                    stdout: String::new(),
+                    stderr: format!("Failed to create workspace: {}", e),
+                    duration_ms: 0,
+                    traces: Vec::new(),
+                }),
+            );
         }
 
-        let base_dir = env!("CARGO_MANIFEST_DIR").replace("playground/backend", "")
-            .trim_end_matches('/')
-            .to_string();
-        let adk_rust_base = format!("{}/../adk-rust", base_dir);
-        let adk_ui_path = format!("{}/../adk-ui", base_dir);
-
-        let cargo_toml = format!(r#"[package]
+        let cargo_toml = r#"[package]
 name = "playground-run"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85.0"
 
 [dependencies]
-adk-rust = {{ path = "{adk_rust}/adk-rust", default-features = false, features = ["full"] }}
-adk-ui = {{ path = "{adk_ui}" }}
-tokio = {{ version = "1", features = ["full"] }}
-serde = {{ version = "1", features = ["derive"] }}
+adk-rust = { version = "0.4.0", default-features = false, features = ["full"] }
+adk-tool = "0.4.0"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+schemars = "0.8"
+async-trait = "0.1"
 anyhow = "1"
 dotenvy = "0.15"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+"#;
 
-[patch."https://github.com/zavora-ai/adk-rust"]
-adk-core = {{ path = "{adk_rust}/adk-core" }}
-adk-agent = {{ path = "{adk_rust}/adk-agent" }}
-adk-model = {{ path = "{adk_rust}/adk-model" }}
-adk-tool = {{ path = "{adk_rust}/adk-tool" }}
-adk-runner = {{ path = "{adk_rust}/adk-runner" }}
-adk-server = {{ path = "{adk_rust}/adk-server" }}
-adk-session = {{ path = "{adk_rust}/adk-session" }}
-adk-artifact = {{ path = "{adk_rust}/adk-artifact" }}
-adk-memory = {{ path = "{adk_rust}/adk-memory" }}
-adk-cli = {{ path = "{adk_rust}/adk-cli" }}
-adk-realtime = {{ path = "{adk_rust}/adk-realtime" }}
-adk-graph = {{ path = "{adk_rust}/adk-graph" }}
-adk-browser = {{ path = "{adk_rust}/adk-browser" }}
-adk-eval = {{ path = "{adk_rust}/adk-eval" }}
-adk-ui = {{ path = "{adk_ui}" }}
-adk-telemetry = {{ path = "{adk_rust}/adk-telemetry" }}
-adk-guardrail = {{ path = "{adk_rust}/adk-guardrail" }}
-adk-auth = {{ path = "{adk_rust}/adk-auth" }}
-adk-plugin = {{ path = "{adk_rust}/adk-plugin" }}
-adk-skill = {{ path = "{adk_rust}/adk-skill" }}
-adk-gemini = {{ path = "{adk_rust}/adk-gemini" }}
-adk-code = {{ path = "{adk_rust}/adk-code" }}
-adk-sandbox = {{ path = "{adk_rust}/adk-sandbox" }}
-adk-doc-audit = {{ path = "{adk_rust}/adk-doc-audit" }}
-adk-rag = {{ path = "{adk_rust}/adk-rag" }}
-adk-audio = {{ path = "{adk_rust}/adk-audio" }}
-adk-deploy = {{ path = "{adk_rust}/adk-deploy" }}
-adk-rust = {{ path = "{adk_rust}/adk-rust" }}
-"#,
-            adk_rust = adk_rust_base,
-            adk_ui = adk_ui_path,
-        );
-
-        if let Err(e) = tokio::fs::write(workspace.join("Cargo.toml"), &cargo_toml).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(RunResponse {
-                success: false,
-                stdout: String::new(),
-                stderr: format!("Failed to write Cargo.toml: {}", e),
-                duration_ms: 0,
-            }));
+        if let Err(e) = tokio::fs::write(workspace.join("Cargo.toml"), cargo_toml).await {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(RunResponse {
+                    success: false,
+                    stdout: String::new(),
+                    stderr: format!("Failed to write Cargo.toml: {}", e),
+                    duration_ms: 0,
+                    traces: Vec::new(),
+                }),
+            );
         }
     }
 
-    // Write the user's code (only thing that changes between runs)
-    if let Err(e) = tokio::fs::write(workspace.join("src/main.rs"), &req.code).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(RunResponse {
-            success: false,
-            stdout: String::new(),
-            stderr: format!("Failed to write source: {}", e),
-            duration_ms: 0,
-        }));
+    // Inject tracing subscriber init into the code
+    let code_with_tracing = inject_tracing_init(&code);
+
+    if let Err(e) = tokio::fs::write(workspace.join("src/main.rs"), &code_with_tracing).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(RunResponse {
+                success: false,
+                stdout: String::new(),
+                stderr: format!("Failed to write source: {}", e),
+                duration_ms: 0,
+                traces: Vec::new(),
+            }),
+        );
     }
 
-    // Write .env if GOOGLE_API_KEY is set
-    if let Ok(key) = std::env::var("GOOGLE_API_KEY") {
-        let _ = tokio::fs::write(workspace.join(".env"), format!("GOOGLE_API_KEY={}\n", key)).await;
+    // Forward API keys
+    let mut env_lines = Vec::new();
+    for key in ["GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
+        if let Ok(val) = std::env::var(key) {
+            env_lines.push(format!("{}={}", key, val));
+        }
+    }
+    if !env_lines.is_empty() {
+        let _ = tokio::fs::write(workspace.join(".env"), env_lines.join("\n")).await;
     }
 
     let start = std::time::Instant::now();
 
-    // Build (5 min timeout for first build, subsequent builds are fast due to cached deps)
+    // Build (5 min timeout for first build)
     let build_output = tokio::time::timeout(
         std::time::Duration::from_secs(300),
         Command::new("cargo")
@@ -160,46 +193,61 @@ adk-rust = {{ path = "{adk_rust}/adk-rust" }}
             .current_dir(workspace)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .output()
-    ).await;
+            .output(),
+    )
+    .await;
 
     let build_result = match build_output {
         Ok(Ok(o)) => o,
         Ok(Err(e)) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(RunResponse {
-                success: false,
-                stdout: String::new(),
-                stderr: format!("Failed to run cargo: {}", e),
-                duration_ms: start.elapsed().as_millis() as u64,
-            }));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(RunResponse {
+                    success: false,
+                    stdout: String::new(),
+                    stderr: format!("Failed to run cargo: {}", e),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    traces: Vec::new(),
+                }),
+            )
         }
         Err(_) => {
-            return (StatusCode::OK, Json(RunResponse {
-                success: false,
-                stdout: String::new(),
-                stderr: "Build timed out (5 min limit). First builds take longer.".into(),
-                duration_ms: start.elapsed().as_millis() as u64,
-            }));
+            return (
+                StatusCode::OK,
+                Json(RunResponse {
+                    success: false,
+                    stdout: String::new(),
+                    stderr: "Build timed out (5 min limit). First builds take longer.".into(),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    traces: Vec::new(),
+                }),
+            )
         }
     };
 
     if !build_result.status.success() {
         let stderr = String::from_utf8_lossy(&build_result.stderr).to_string();
-        return (StatusCode::OK, Json(RunResponse {
-            success: false,
-            stdout: String::new(),
-            stderr: format!("Compilation failed:\n{}", stderr),
-            duration_ms: start.elapsed().as_millis() as u64,
-        }));
+        return (
+            StatusCode::OK,
+            Json(RunResponse {
+                success: false,
+                stdout: String::new(),
+                stderr: format!("Compilation failed:\n{}", stderr),
+                duration_ms: start.elapsed().as_millis() as u64,
+                traces: Vec::new(),
+            }),
+        );
     }
 
     // Run with 30s timeout
     let mut run_cmd = Command::new("cargo");
-    run_cmd.arg("run").current_dir(workspace)
+    run_cmd
+        .arg("run")
+        .current_dir(workspace)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .env("RUST_LOG", "info,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn");
 
-    // Forward API keys to child process
     for key in ["GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
         if let Ok(val) = std::env::var(key) {
             run_cmd.env(key, val);
@@ -208,8 +256,9 @@ adk-rust = {{ path = "{adk_rust}/adk-rust" }}
 
     let run_output = tokio::time::timeout(
         std::time::Duration::from_secs(30),
-        run_cmd.output()
-    ).await;
+        run_cmd.output(),
+    )
+    .await;
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -217,392 +266,300 @@ adk-rust = {{ path = "{adk_rust}/adk-rust" }}
         Ok(Ok(output)) => {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let raw_stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            // Filter out cargo build noise from stderr on successful runs
-            let stderr = if output.status.success() {
-                raw_stderr.lines()
-                    .filter(|line| {
-                        let trimmed = line.trim();
-                        !trimmed.starts_with("Compiling ")
-                            && !trimmed.starts_with("Finished ")
-                            && !trimmed.starts_with("Running ")
-                            && !trimmed.starts_with("Downloading ")
-                            && !trimmed.starts_with("Downloaded ")
-                            && !trimmed.starts_with("Building ")
-                            && !trimmed.starts_with("Updating ")
-                            && !trimmed.starts_with("Locking ")
-                            && !trimmed.starts_with("warning: unused")
-                            && !trimmed.starts_with("warning: `playground-run`")
-                            && !trimmed.contains("generated 1 warning")
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n")
-                    .trim()
-                    .to_string()
+            let (stderr, traces) = if output.status.success() {
+                parse_traces(&raw_stderr, 0)
             } else {
-                raw_stderr
+                (raw_stderr, Vec::new())
             };
-            (StatusCode::OK, Json(RunResponse {
-                success: output.status.success(),
-                stdout,
-                stderr,
+            (
+                StatusCode::OK,
+                Json(RunResponse {
+                    success: output.status.success(),
+                    stdout,
+                    stderr,
+                    duration_ms,
+                    traces,
+                }),
+            )
+        }
+        Ok(Err(e)) => (
+            StatusCode::OK,
+            Json(RunResponse {
+                success: false,
+                stdout: String::new(),
+                stderr: format!("Run failed: {}", e),
                 duration_ms,
-            }))
-        }
-        Ok(Err(e)) => (StatusCode::OK, Json(RunResponse {
-            success: false,
-            stdout: String::new(),
-            stderr: format!("Run failed: {}", e),
-            duration_ms,
-        })),
-        Err(_) => (StatusCode::OK, Json(RunResponse {
-            success: false,
-            stdout: String::new(),
-            stderr: "Execution timed out (30s limit)".into(),
-            duration_ms,
-        })),
+                traces: Vec::new(),
+            }),
+        ),
+        Err(_) => (
+            StatusCode::OK,
+            Json(RunResponse {
+                success: false,
+                stdout: String::new(),
+                stderr: "Execution timed out (30s limit)".into(),
+                duration_ms,
+                traces: Vec::new(),
+            }),
+        ),
     }
 }
 
-fn get_examples() -> Vec<Example> {
-    vec![
-        Example {
-            id: "quickstart".into(),
-            name: "Quickstart".into(),
-            category: "Getting Started".into(),
-            description: "Basic ADK agent with Gemini".into(),
-            code: r#"use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
-use adk_rust::futures::StreamExt;
-use std::collections::HashMap;
-use std::sync::Arc;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-    let api_key = std::env::var("GOOGLE_API_KEY")?;
-    let model = Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?);
+/// Inject a JSON tracing subscriber init into user code so we capture structured traces.
+fn inject_tracing_init(code: &str) -> String {
+    // Insert tracing init right after `dotenvy::dotenv().ok();`
+    let tracing_init = r#"
+    // --- Playground tracing (auto-injected) ---
+    tracing_subscriber::fmt()
+        .json()
+        .with_target(true)
+        .with_env_filter(tracing_subscriber::EnvFilter::new("info,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn"))
+        .with_writer(std::io::stderr)
+        .init();
+    // --- End playground tracing ---"#;
 
-    let agent = Arc::new(
-        LlmAgentBuilder::new("assistant")
-            .instruction("You are a helpful assistant. Be concise and friendly.")
-            .model(model)
-            .build()?
-    );
-
-    // Set up session and runner
-    let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
-
-    let runner = Runner::new(RunnerConfig {
-        app_name: "playground".into(),
-        agent,
-        session_service: sessions,
-        artifact_service: None,
-        memory_service: None,
-        plugin_manager: None,
-        run_config: None,
-        compaction_config: None,
-        context_cache_config: None,
-        cache_capable: None,
-        request_context: None,
-        cancellation_token: None,
-    })?;
-
-    // Send a message and collect the response
-    let message = Content::new("user").with_text("What is Rust and why do developers love it? Keep it to 2-3 sentences.");
-    let mut stream = runner.run("user".into(), "s1".into(), message).await?;
-
-    while let Some(event) = stream.next().await {
-        let event = event?;
-        if let Some(content) = &event.llm_response.content {
-            for part in &content.parts {
-                if let Some(text) = part.text() {
-                    print!("{}", text);
-                }
-            }
-        }
+    if let Some(pos) = code.find("dotenvy::dotenv().ok();") {
+        let insert_at = pos + "dotenvy::dotenv().ok();".len();
+        let mut result = String::with_capacity(code.len() + tracing_init.len());
+        result.push_str(&code[..insert_at]);
+        result.push_str(tracing_init);
+        result.push_str(&code[insert_at..]);
+        result
+    } else {
+        code.to_string()
     }
-    println!();
-    Ok(())
-}"#.into(),
-        },
-        Example {
-            id: "multi_tool".into(),
-            name: "Agent with Tools".into(),
-            category: "Agents".into(),
-            description: "LLM agent with custom function tools".into(),
-            code: r#"use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
-use adk_rust::futures::StreamExt;
-use std::collections::HashMap;
-use std::sync::Arc;
-
-fn weather_tool() -> FunctionTool {
-    FunctionTool::new(
-        "get_weather",
-        "Get current weather for a city",
-        |_ctx: Arc<dyn ToolContext>, args: serde_json::Value| async move {
-            let city = args["city"].as_str().unwrap_or("unknown");
-            Ok(serde_json::json!({
-                "city": city,
-                "temp": "22°C",
-                "condition": "Sunny"
-            }))
-        },
-    )
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-    let api_key = std::env::var("GOOGLE_API_KEY")?;
-    let model = Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?);
+/// Parse tracing output from stderr into structured trace events.
+/// Returns (user_stderr, traces).
+fn parse_traces(raw_stderr: &str, _run_start_ms: u64) -> (String, Vec<TraceEvent>) {
+    let mut traces = Vec::new();
+    let mut user_lines = Vec::new();
+    let mut ms_counter: u64 = 0;
+    let mut run_start: Option<chrono::DateTime<chrono::Utc>> = None;
 
-    let agent = Arc::new(
-        LlmAgentBuilder::new("weather_agent")
-            .instruction("You help users check the weather. Use the get_weather tool when asked about weather. Be concise.")
-            .model(model)
-            .tool(Arc::new(weather_tool()))
-            .build()?
-    );
+    for line in raw_stderr.lines() {
+        let t = line.trim();
 
-    let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+        // Skip cargo noise
+        if t.starts_with("Compiling ")
+            || t.starts_with("Finished ")
+            || t.starts_with("Running ")
+            || t.starts_with("Downloading ")
+            || t.starts_with("Downloaded ")
+            || t.starts_with("Building ")
+            || t.starts_with("Updating ")
+            || t.starts_with("Locking ")
+            || t.starts_with("warning: unused")
+            || t.starts_with("warning: `playground-run`")
+            || t.contains("generated 1 warning")
+        {
+            continue;
+        }
 
-    let runner = Runner::new(RunnerConfig {
-        app_name: "playground".into(),
-        agent,
-        session_service: sessions,
-        artifact_service: None,
-        memory_service: None,
-        plugin_manager: None,
-        run_config: None,
-        compaction_config: None,
-        context_cache_config: None,
-        cache_capable: None,
-        request_context: None,
-        cancellation_token: None,
-    })?;
-
-    let message = Content::new("user").with_text("What's the weather like in Nairobi?");
-    let mut stream = runner.run("user".into(), "s1".into(), message).await?;
-
-    while let Some(event) = stream.next().await {
-        let event = event?;
-        if let Some(content) = &event.llm_response.content {
-            for part in &content.parts {
-                if let Some(text) = part.text() {
-                    print!("{}", text);
+        // Try to parse tracing JSON lines (from tracing-subscriber JSON format)
+        if t.starts_with('{') {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(t) {
+                // Capture first timestamp as run start for relative timing
+                if run_start.is_none() {
+                    run_start = json.get("timestamp")
+                        .and_then(|v| v.as_str())
+                        .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts).ok())
+                        .map(|dt| dt.with_timezone(&chrono::Utc));
+                }
+                if let Some(evt) = parse_trace_json(&json, ms_counter, run_start.as_ref()) {
+                    ms_counter = evt.timestamp_ms + 1;
+                    traces.push(evt);
+                    continue;
                 }
             }
         }
+
+        // Parse structured tracing text output: "  INFO agent.execute{...}: message"
+        if let Some(evt) = parse_trace_text(t, ms_counter) {
+            ms_counter = evt.timestamp_ms + 1;
+            traces.push(evt);
+            continue;
+        }
+
+        // Everything else is user stderr
+        user_lines.push(line);
     }
-    println!();
-    Ok(())
-}"#.into(),
-        },
-        Example {
-            id: "sequential_workflow".into(),
-            name: "Sequential Pipeline".into(),
-            category: "Workflows".into(),
-            description: "Chain agents in a sequential pipeline".into(),
-            code: r#"use adk_rust::prelude::*;
-use std::sync::Arc;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-    let api_key = std::env::var("GOOGLE_API_KEY")
-        .unwrap_or_else(|_| "demo-key".into());
-    let model = Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?);
+    // If no structured traces found, synthesize from stdout patterns
+    let user_stderr = user_lines.join("\n").trim().to_string();
+    (user_stderr, traces)
+}
 
-    let researcher: Arc<dyn Agent> = Arc::new(
-        LlmAgentBuilder::new("researcher")
-            .instruction("Research the topic thoroughly.")
-            .model(model.clone())
-            .build()?
-    );
+fn parse_trace_json(json: &serde_json::Value, ms: u64, run_start: Option<&chrono::DateTime<chrono::Utc>>) -> Option<TraceEvent> {
+    // tracing-subscriber JSON format:
+    // {"timestamp":"...","level":"INFO","fields":{"message":"...","tool.name":"..."},"target":"adk_agent::llm_agent","span":{"name":"agent.execute"},"spans":[...]}
+    let level = json.get("level")?.as_str()?.to_lowercase();
+    let target = json.get("target").and_then(|v| v.as_str()).unwrap_or("");
+    let fields = json.get("fields").cloned().unwrap_or(serde_json::Value::Null);
+    let message = fields.get("message").and_then(|m| m.as_str()).unwrap_or("").to_string();
 
-    let writer: Arc<dyn Agent> = Arc::new(
-        LlmAgentBuilder::new("writer")
-            .instruction("Write a clear summary from the research.")
-            .model(model.clone())
-            .build()?
-    );
-
-    let pipeline = SequentialAgent::new(
-        "research_pipeline",
-        vec![researcher, writer],
-    );
-
-    println!("Pipeline '{}' ready with 2 stages", pipeline.name());
-    Ok(())
-}"#.into(),
-        },
-        Example {
-            id: "graph_agent".into(),
-            name: "Graph Agent".into(),
-            category: "Graph".into(),
-            description: "Stateful graph-based agent with conditional routing".into(),
-            code: r#"use adk_rust::graph::{StateGraph, NodeOutput, START, END};
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let graph = StateGraph::with_channels(&["input", "output", "sentiment"])
-        .add_node_fn("analyze", |ctx| async move {
-            let input = ctx.state.get("input")
-                .and_then(|v| v.as_str())
-                .unwrap_or("neutral text");
-            let sentiment = if input.contains("great") || input.contains("love") {
-                "positive"
-            } else if input.contains("bad") || input.contains("hate") {
-                "negative"
+    // Parse real timestamp from tracing-subscriber output
+    let timestamp_ms = json.get("timestamp")
+        .and_then(|v| v.as_str())
+        .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts).ok())
+        .map(|dt| {
+            if let Some(start) = run_start {
+                let diff = dt.signed_duration_since(*start);
+                diff.num_milliseconds().max(0) as u64
             } else {
-                "neutral"
-            };
-            Ok(NodeOutput::new()
-                .with_update("sentiment", sentiment))
+                ms
+            }
         })
-        .add_node_fn("respond_positive", |_ctx| async move {
-            Ok(NodeOutput::new()
-                .with_update("output", "That's wonderful to hear! 🎉"))
-        })
-        .add_node_fn("respond_negative", |_ctx| async move {
-            Ok(NodeOutput::new()
-                .with_update("output", "I'm sorry to hear that. How can I help?"))
-        })
-        .add_node_fn("respond_neutral", |_ctx| async move {
-            Ok(NodeOutput::new()
-                .with_update("output", "Thanks for sharing. Tell me more."))
-        })
-        .add_edge(START, "analyze")
-        .add_conditional_edges(
-            "analyze",
-            |state| {
-                state.get("sentiment")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("neutral")
-                    .to_string()
-            },
-            [
-                ("positive", "respond_positive"),
-                ("negative", "respond_negative"),
-                ("neutral", "respond_neutral"),
-            ],
-        )
-        .add_edge("respond_positive", END)
-        .add_edge("respond_negative", END)
-        .add_edge("respond_neutral", END)
-        .compile()?;
+        .unwrap_or(ms);
 
-    println!("Graph compiled with {} nodes and conditional routing!", graph.schema().channels.len());
-    println!("Entry nodes: {:?}", graph.get_entry_nodes());
-    Ok(())
-}"#.into(),
-        },
-        Example {
-            id: "structured_output".into(),
-            name: "Structured Output".into(),
-            category: "Agents".into(),
-            description: "Get typed JSON responses from an agent".into(),
-            code: r#"use adk_rust::prelude::*;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+    // Extract span info from "spans" array or "span" object
+    let span_name = json.get("span")
+        .and_then(|s| s.get("name"))
+        .and_then(|n| n.as_str())
+        .or_else(|| {
+            json.get("spans")
+                .and_then(|s| s.as_array())
+                .and_then(|arr| arr.last())
+                .and_then(|s| s.get("name"))
+                .and_then(|n| n.as_str())
+        })
+        .unwrap_or("");
 
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
-struct MovieReview {
-    title: String,
-    rating: f32,
-    summary: String,
-    recommended: bool,
+    // Extract agent name from spans
+    let agent = json.get("spans")
+        .and_then(|s| s.as_array())
+        .and_then(|arr| {
+            arr.iter().find_map(|s| {
+                s.get("agent.name").and_then(|v| v.as_str())
+                    .or_else(|| s.get("gcp.vertex.agent.agent_name").and_then(|v| v.as_str()))
+            })
+        })
+        .or_else(|| {
+            fields.get("agent.name").and_then(|v| v.as_str())
+        })
+        .map(|s| s.to_string());
+
+    // Extract tool name
+    let tool = fields.get("tool.name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    // Extract detail (tool args or result)
+    let detail = fields.get("tool.args")
+        .or_else(|| fields.get("tool.result"))
+        .and_then(|v| v.as_str())
+        .map(|s| {
+            if s.len() > 500 { format!("{}...", &s[..500]) } else { s.to_string() }
+        });
+
+    let kind = classify_trace(span_name, target, &message, tool.as_deref());
+
+    // Skip noisy internal traces
+    if target.starts_with("hyper") || target.starts_with("reqwest") || target.starts_with("h2")
+        || target.starts_with("rustls") || target.starts_with("tonic") || target.starts_with("tower")
+        || target.starts_with("mio") || target.starts_with("want")
+    {
+        return None;
+    }
+
+    Some(TraceEvent {
+        timestamp_ms,
+        level,
+        name: if span_name.is_empty() { target.to_string() } else { span_name.to_string() },
+        message,
+        agent,
+        tool,
+        detail,
+        kind,
+        target: target.to_string(),
+    })
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-    let api_key = std::env::var("GOOGLE_API_KEY")
-        .unwrap_or_else(|_| "demo-key".into());
-    let model = Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?);
+fn parse_trace_text(line: &str, ms: u64) -> Option<TraceEvent> {
+    // Match patterns like: "  INFO agent.execute{...}: Agent execution complete"
+    // or "  INFO tool_call agent.name=foo tool.name=bar"
+    let trimmed = line.trim();
 
-    let schema = serde_json::json!({
-        "type": "object",
-        "properties": {
-            "title": { "type": "string" },
-            "rating": { "type": "number" },
-            "summary": { "type": "string" },
-            "recommended": { "type": "boolean" }
-        },
-        "required": ["title", "rating", "summary", "recommended"]
-    });
+    let (level, rest) = if trimmed.starts_with("INFO ") {
+        ("info", &trimmed[5..])
+    } else if trimmed.starts_with("WARN ") {
+        ("warn", &trimmed[5..])
+    } else if trimmed.starts_with("DEBUG ") {
+        ("debug", &trimmed[6..])
+    } else {
+        return None;
+    };
 
-    let agent = LlmAgentBuilder::new("reviewer")
-        .instruction("You review movies. Always respond with structured JSON.")
-        .model(model)
-        .output_schema(schema)
-        .build()?;
+    let agent = extract_field(rest, "agent.name=");
+    let tool = extract_field(rest, "tool.name=");
+    let tool_args = extract_field(rest, "tool.args=");
+    let tool_result = extract_field(rest, "tool.result=");
 
-    println!("Structured output agent '{}' ready!", agent.name());
-    println!("Expected schema: MovieReview {{ title, rating, summary, recommended }}");
-    Ok(())
-}"#.into(),
-        },
-        Example {
-            id: "parallel_workflow".into(),
-            name: "Parallel Analysis".into(),
-            category: "Workflows".into(),
-            description: "Run multiple agents in parallel and merge results".into(),
-            code: r#"use adk_rust::prelude::*;
-use std::sync::Arc;
+    let (name, message) = if let Some(colon_pos) = rest.find(": ") {
+        let span_part = &rest[..colon_pos];
+        let msg_part = &rest[colon_pos + 2..];
+        let name = span_part.split('{').next().unwrap_or(span_part).trim();
+        (name.to_string(), msg_part.to_string())
+    } else {
+        (rest.split_whitespace().next().unwrap_or("").to_string(), rest.to_string())
+    };
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-    let api_key = std::env::var("GOOGLE_API_KEY")
-        .unwrap_or_else(|_| "demo-key".into());
-    let model = Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?);
+    let kind = classify_trace(&name, "", &message, tool.as_deref());
 
-    let sentiment: Arc<dyn Agent> = Arc::new(
-        LlmAgentBuilder::new("sentiment")
-            .instruction("Analyze the sentiment of the text.")
-            .model(model.clone())
-            .build()?
-    );
+    let detail = tool_args.or(tool_result);
 
-    let keywords: Arc<dyn Agent> = Arc::new(
-        LlmAgentBuilder::new("keywords")
-            .instruction("Extract key topics from the text.")
-            .model(model.clone())
-            .build()?
-    );
+    Some(TraceEvent {
+        timestamp_ms: ms,
+        level: level.to_string(),
+        name,
+        message,
+        agent,
+        tool,
+        detail,
+        kind,
+        target: String::new(),
+    })
+}
 
-    let summary: Arc<dyn Agent> = Arc::new(
-        LlmAgentBuilder::new("summary")
-            .instruction("Write a one-line summary.")
-            .model(model)
-            .build()?
-    );
+fn extract_field(text: &str, prefix: &str) -> Option<String> {
+    text.find(prefix).map(|start| {
+        let val_start = start + prefix.len();
+        let val = &text[val_start..];
+        val.split_whitespace().next().unwrap_or("").to_string()
+    })
+}
 
-    let parallel = ParallelAgent::new(
-        "text_analyzer",
-        vec![sentiment, keywords, summary],
-    );
+fn classify_trace(name: &str, target: &str, message: &str, tool: Option<&str>) -> String {
+    let msg_lower = message.to_lowercase();
+    if name.contains("agent.execute") || msg_lower.contains("agent execution") || msg_lower.contains("agent '") {
+        "agent".to_string()
+    } else if name.contains("llm") || msg_lower.contains("llm_response") || msg_lower.contains("llm_call")
+        || target.contains("gemini") || target.contains("model") {
+        "llm".to_string()
+    } else if msg_lower.contains("tool_call") || (tool.is_some() && msg_lower.contains("tool_call")) {
+        "tool_call".to_string()
+    } else if msg_lower.contains("tool_result") {
+        "tool_result".to_string()
+    } else if msg_lower.contains("tool_error") || msg_lower.contains("tool_timeout") {
+        "tool_error".to_string()
+    } else if tool.is_some() {
+        "tool_call".to_string()
+    } else if msg_lower.contains("warn") || message.contains("WARN") {
+        "warn".to_string()
+    } else {
+        "info".to_string()
+    }
+}
 
-    println!("Parallel analyzer '{}' ready with 3 branches", parallel.name());
-    Ok(())
-}"#.into(),
-        },
-    ]
+/// Info endpoint: tells the frontend what mode the server is in
+async fn server_info() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "mode": if is_public_mode() { "public" } else { "local" },
+        "version": env!("CARGO_PKG_VERSION"),
+        "custom_code_enabled": !is_public_mode(),
+    }))
 }
 
 #[derive(Clone)]
@@ -614,9 +571,11 @@ struct AppState {
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
-    let workspace_dir = std::env::temp_dir().join("adk-playground-workspace");
+
+    let mode = if is_public_mode() { "public" } else { "local" };
+
     let state = AppState {
-        workspace_dir,
+        workspace_dir: std::env::temp_dir().join("adk-playground-workspace"),
         build_lock: Arc::new(Mutex::new(())),
     };
 
@@ -627,16 +586,23 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/health", get(health))
+        .route("/api/info", get(server_info))
         .route("/api/examples", get(list_examples))
         .route("/api/run", post(run_code))
         .fallback_service(ServeDir::new("../frontend/dist"))
         .layer(cors)
         .with_state(state);
 
-    let port = 9876;
-    let addr = format!("0.0.0.0:{}", port);
-    println!("🚀 ADK Playground server running on http://localhost:{}", port);
+    let port = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(9876u16);
 
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    println!("🚀 ADK Playground server running on http://localhost:{}", port);
+    println!("   Mode: {} | Custom code: {}", mode, !is_public_mode());
+
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
     axum::serve(listener, app).await.unwrap();
 }

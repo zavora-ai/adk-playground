@@ -1,0 +1,226 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ADK Playground - Spot Instance on default VPC
+
+Parameters:
+  GoogleApiKey:
+    Type: String
+    NoEcho: true
+
+  SpotMaxPrice:
+    Type: String
+    Default: '0.025'
+
+  InstanceType:
+    Type: String
+    Default: t4g.medium
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to deploy into (use default VPC)
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Public subnets (pick 2+ from default VPC)
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+
+  GitHubRepo:
+    Type: String
+    Default: https://github.com/zavora-ai/adk-playground.git
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ADK Playground
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0}
+        - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: AssociateEIP
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:AssociateAddress
+                  - ec2:DescribeAddresses
+                Resource: '*'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: adk-playground
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref SecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -euo pipefail
+            exec > /var/log/adk-setup.log 2>&1
+            echo "=== ADK Playground Setup $(date) ==="
+
+            INSTANCE_ID=$(ec2-metadata -i | cut -d' ' -f2)
+            aws ec2 associate-address --instance-id "$INSTANCE_ID" --allocation-id "${ElasticIP.AllocationId}" --region ${AWS::Region} || true
+
+            dnf update -y
+            dnf install -y gcc openssl-devel pkg-config git
+
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0
+            source /root/.cargo/env
+
+            # Install Caddy from binary
+            curl -sL "https://caddyserver.com/api/download?os=linux&arch=arm64" -o /usr/bin/caddy
+            chmod +x /usr/bin/caddy
+            mkdir -p /etc/caddy
+
+            cd /opt
+            git clone --depth 1 ${GitHubRepo} playground
+            cd /opt/playground/playground/backend
+            cargo build --release
+            echo "=== Backend built ==="
+
+            cat > /opt/playground/.env <<EOF
+            GOOGLE_API_KEY=${GoogleApiKey}
+            PLAYGROUND_MODE=public
+            PORT=8080
+            EOF
+
+            cat > /etc/systemd/system/adk-playground.service <<EOF
+            [Unit]
+            Description=ADK Playground
+            After=network.target
+            [Service]
+            Type=simple
+            WorkingDirectory=/opt/playground/playground/backend
+            EnvironmentFile=/opt/playground/.env
+            ExecStart=/opt/playground/playground/backend/target/release/adk-playground-server
+            Restart=always
+            RestartSec=3
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            systemctl daemon-reload
+            systemctl enable --now adk-playground
+
+            cat > /etc/caddy/Caddyfile <<EOF
+            :80 {
+              reverse_proxy localhost:8080
+            }
+            EOF
+
+            cat > /etc/systemd/system/caddy.service <<EOF
+            [Unit]
+            Description=Caddy
+            After=network.target
+            [Service]
+            Type=simple
+            ExecStart=/usr/bin/caddy run --config /etc/caddy/Caddyfile
+            Restart=always
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            systemctl daemon-reload
+            systemctl enable --now caddy
+
+            echo "=== Pre-warming compilation cache ==="
+            mkdir -p /tmp/adk-playground-workspace/src
+            cat > /tmp/adk-playground-workspace/Cargo.toml <<EOF
+            [package]
+            name = "playground-run"
+            version = "0.1.0"
+            edition = "2024"
+            rust-version = "1.85.0"
+            [dependencies]
+            adk-rust = { version = "0.4.0", default-features = false, features = ["full"] }
+            adk-tool = "0.4.0"
+            tokio = { version = "1", features = ["full"] }
+            serde = { version = "1", features = ["derive"] }
+            serde_json = "1"
+            schemars = "0.8"
+            async-trait = "0.1"
+            anyhow = "1"
+            dotenvy = "0.15"
+            tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+            EOF
+            echo 'fn main() { println!("warm"); }' > /tmp/adk-playground-workspace/src/main.rs
+            cd /tmp/adk-playground-workspace
+            cargo build 2>&1 || true
+            echo "=== Setup Complete $(date) ==="
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '1'
+      MaxSize: '1'
+      DesiredCapacity: '1'
+      VPCZoneIdentifier: !Ref SubnetIds
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandBaseCapacity: 0
+          OnDemandPercentageAboveBaseCapacity: 0
+          SpotAllocationStrategy: price-capacity-optimized
+          SpotMaxPrice: !Ref SpotMaxPrice
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate
+            Version: !GetAtt LaunchTemplate.LatestVersionNumber
+          Overrides:
+            - InstanceType: t4g.medium
+            - InstanceType: t4g.small
+            - InstanceType: t4g.large
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 900
+      Tags:
+        - Key: Name
+          Value: adk-playground
+          PropagateAtLaunch: true
+
+Outputs:
+  PlaygroundURL:
+    Value: !Sub 'http://${ElasticIP}'
+  ElasticIP:
+    Value: !Ref ElasticIP
+  CostEstimate:
+    Value: 'Spot ~$10-12/mo + EBS $1.60/mo = ~$12-14/mo total'

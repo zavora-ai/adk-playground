@@ -74,65 +74,35 @@ hex = "0.4"
 flate2 = "1.0"
 tar = "0.4"
 
-# ADK crates from local sister project
-adk-core = { path = "../adk-rust/adk-core" }
-adk-agent = { path = "../adk-rust/adk-agent" }
-adk-model = { path = "../adk-rust/adk-model" }
-adk-tool = { path = "../adk-rust/adk-tool" }
-adk-runner = { path = "../adk-rust/adk-runner" }
-adk-server = { path = "../adk-rust/adk-server" }
-adk-session = { path = "../adk-rust/adk-session" }
-adk-artifact = { path = "../adk-rust/adk-artifact" }
-adk-memory = { path = "../adk-rust/adk-memory" }
-adk-cli = { path = "../adk-rust/adk-cli" }
-adk-realtime = { path = "../adk-rust/adk-realtime" }
-adk-graph = { path = "../adk-rust/adk-graph" }
-adk-browser = { path = "../adk-rust/adk-browser" }
-adk-eval = { path = "../adk-rust/adk-eval" }
-adk-ui = { path = "../adk-ui" }
-adk-telemetry = { path = "../adk-rust/adk-telemetry" }
-adk-guardrail = { path = "../adk-rust/adk-guardrail" }
-adk-auth = { path = "../adk-rust/adk-auth" }
-adk-plugin = { path = "../adk-rust/adk-plugin" }
-adk-skill = { path = "../adk-rust/adk-skill" }
-adk-gemini = { path = "../adk-rust/adk-gemini" }
-adk-code = { path = "../adk-rust/adk-code" }
-adk-sandbox = { path = "../adk-rust/adk-sandbox" }
-adk-doc-audit = { path = "../adk-rust/adk-doc-audit" }
-adk-rag = { path = "../adk-rust/adk-rag" }
-adk-audio = { path = "../adk-rust/adk-audio" }
-adk-deploy = { path = "../adk-rust/adk-deploy" }
-adk-rust = { path = "../adk-rust/adk-rust", default-features = false }
-
-[patch."https://github.com/zavora-ai/adk-rust"]
-adk-core = { path = "../adk-rust/adk-core" }
-adk-agent = { path = "../adk-rust/adk-agent" }
-adk-model = { path = "../adk-rust/adk-model" }
-adk-tool = { path = "../adk-rust/adk-tool" }
-adk-runner = { path = "../adk-rust/adk-runner" }
-adk-server = { path = "../adk-rust/adk-server" }
-adk-session = { path = "../adk-rust/adk-session" }
-adk-artifact = { path = "../adk-rust/adk-artifact" }
-adk-memory = { path = "../adk-rust/adk-memory" }
-adk-cli = { path = "../adk-rust/adk-cli" }
-adk-realtime = { path = "../adk-rust/adk-realtime" }
-adk-graph = { path = "../adk-rust/adk-graph" }
-adk-browser = { path = "../adk-rust/adk-browser" }
-adk-eval = { path = "../adk-rust/adk-eval" }
-adk-ui = { path = "../adk-ui" }
-adk-telemetry = { path = "../adk-rust/adk-telemetry" }
-adk-guardrail = { path = "../adk-rust/adk-guardrail" }
-adk-auth = { path = "../adk-rust/adk-auth" }
-adk-plugin = { path = "../adk-rust/adk-plugin" }
-adk-skill = { path = "../adk-rust/adk-skill" }
-adk-gemini = { path = "../adk-rust/adk-gemini" }
-adk-code = { path = "../adk-rust/adk-code" }
-adk-sandbox = { path = "../adk-rust/adk-sandbox" }
-adk-doc-audit = { path = "../adk-rust/adk-doc-audit" }
-adk-rag = { path = "../adk-rust/adk-rag" }
-adk-audio = { path = "../adk-rust/adk-audio" }
-adk-deploy = { path = "../adk-rust/adk-deploy" }
-adk-rust = { path = "../adk-rust/adk-rust" }
+# ADK crates from crates.io
+adk-core = { version = "0.4.0" }
+adk-agent = { version = "0.4.0" }
+adk-model = { version = "0.4.0" }
+adk-tool = { version = "0.4.0" }
+adk-runner = { version = "0.4.0" }
+adk-server = { version = "0.4.0" }
+adk-session = { version = "0.4.0" }
+adk-artifact = { version = "0.4.0" }
+adk-memory = { version = "0.4.0" }
+adk-cli = { version = "0.4.0" }
+adk-realtime = { version = "0.4.0" }
+adk-graph = { version = "0.4.0" }
+adk-browser = { version = "0.4.0" }
+adk-eval = { version = "0.4.0" }
+adk-ui = { version = "0.3.2" }
+adk-telemetry = { version = "0.4.0" }
+adk-guardrail = { version = "0.4.0" }
+adk-auth = { version = "0.4.0" }
+adk-plugin = { version = "0.4.0" }
+adk-skill = { version = "0.4.0" }
+adk-gemini = { version = "0.4.0" }
+adk-code = { version = "0.4.0" }
+adk-sandbox = { version = "0.4.0" }
+adk-doc-audit = { version = "0.3.2" }
+adk-rag = { version = "0.4.0" }
+adk-audio = { version = "0.4.0" }
+adk-deploy = { version = "0.4.0" }
+adk-rust = { version = "0.4.0", default-features = false }
 
 [profile.dev]
 debug = 1

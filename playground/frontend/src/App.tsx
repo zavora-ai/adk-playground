@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
-import { Play, Loader2, BookOpen, ChevronRight, Terminal, Clock, CheckCircle, XCircle, Keyboard } from 'lucide-react';
+import { Play, Loader2, BookOpen, ChevronRight, ChevronDown, Terminal, Clock, CheckCircle, XCircle, Keyboard, Lock, Globe, Activity, Cpu, Wrench, MessageSquare, AlertTriangle, Bot } from 'lucide-react';
 import './App.css';
 
 interface Example {
@@ -11,16 +11,236 @@ interface Example {
   code: string;
 }
 
+interface TraceEvent {
+  timestamp_ms: number;
+  level: string;
+  name: string;
+  message: string;
+  agent?: string;
+  tool?: string;
+  detail?: string;
+  kind: string;
+  target?: string;
+}
+
 interface RunResult {
   success: boolean;
   stdout: string;
   stderr: string;
   duration_ms: number;
+  traces?: TraceEvent[];
+}
+
+interface ServerInfo {
+  mode: 'public' | 'local';
+  version: string;
+  custom_code_enabled: boolean;
 }
 
 const API = import.meta.env.DEV ? 'http://localhost:9876' : '';
 const IS_MAC = navigator.platform.toUpperCase().includes('MAC');
 const MOD_KEY = IS_MAC ? '⌘' : 'Ctrl';
+
+const TRACE_ICONS: Record<string, typeof Activity> = {
+  agent: Bot,
+  llm: Cpu,
+  tool_call: Wrench,
+  tool_result: CheckCircle,
+  tool_error: AlertTriangle,
+  info: MessageSquare,
+  warn: AlertTriangle,
+};
+
+function TraceIcon({ kind }: { kind: string }) {
+  const Icon = TRACE_ICONS[kind] || Activity;
+  return <Icon size={12} />;
+}
+
+/** Group flat trace events into a tree: agent → llm/tool children */
+interface TraceNode {
+  event: TraceEvent;
+  children: TraceNode[];
+}
+
+function buildTraceTree(events: TraceEvent[]): TraceNode[] {
+  const roots: TraceNode[] = [];
+  let currentAgent: TraceNode | null = null;
+
+  for (const evt of events) {
+    const node: TraceNode = { event: evt, children: [] };
+    if (evt.kind === 'agent') {
+      roots.push(node);
+      currentAgent = node;
+    } else if (currentAgent) {
+      currentAgent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  return roots;
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function TraceDetail({ event, duration }: { event: TraceEvent; duration?: number }) {
+  return (
+    <div className="trace-detail-panel">
+      <div className="trace-detail-grid">
+        <span className="trace-detail-key">Kind</span>
+        <span className={`trace-detail-val trace-kind-tag trace-kind-tag-${event.kind}`}>{event.kind}</span>
+        <span className="trace-detail-key">Level</span>
+        <span className="trace-detail-val">{event.level.toUpperCase()}</span>
+        <span className="trace-detail-key">Time</span>
+        <span className="trace-detail-val">{formatMs(event.timestamp_ms)}</span>
+        {duration !== undefined && duration > 0 && (
+          <>
+            <span className="trace-detail-key">Duration</span>
+            <span className="trace-detail-val trace-duration-val">{formatMs(duration)}</span>
+          </>
+        )}
+        {event.agent && (
+          <>
+            <span className="trace-detail-key">Agent</span>
+            <span className="trace-detail-val">{event.agent}</span>
+          </>
+        )}
+        {event.tool && (
+          <>
+            <span className="trace-detail-key">Tool</span>
+            <span className="trace-detail-val">{event.tool}</span>
+          </>
+        )}
+        {event.target && (
+          <>
+            <span className="trace-detail-key">Target</span>
+            <span className="trace-detail-val trace-target-val">{event.target}</span>
+          </>
+        )}
+        <span className="trace-detail-key">Span</span>
+        <span className="trace-detail-val">{event.name || '—'}</span>
+      </div>
+      {event.message && (
+        <div className="trace-detail-section">
+          <div className="trace-detail-section-label">Message</div>
+          <pre className="trace-detail-pre">{event.message}</pre>
+        </div>
+      )}
+      {event.detail && (
+        <div className="trace-detail-section">
+          <div className="trace-detail-section-label">Data</div>
+          <pre className="trace-detail-pre">{tryFormatJson(event.detail)}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function tryFormatJson(s: string): string {
+  try {
+    const parsed = JSON.parse(s);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return s;
+  }
+}
+
+function TraceTree({ traces }: { traces: TraceEvent[] }) {
+  const tree = buildTraceTree(traces);
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const toggleExpand = (i: number) => setExpanded(prev => ({ ...prev, [i]: !prev[i] }));
+  const toggleSelect = (key: string) => setSelected(prev => prev === key ? null : key);
+
+  if (tree.length === 0) {
+    return <div className="trace-empty">No trace data captured</div>;
+  }
+
+  return (
+    <div className="trace-tree">
+      {tree.map((node, i) => {
+        const isExpanded = expanded[i] ?? true;
+        const hasChildren = node.children.length > 0;
+        const nodeKey = `root-${i}`;
+        const isSelected = selected === nodeKey;
+
+        // Compute agent duration: time from first to last child (or own timestamp)
+        const agentDuration = hasChildren
+          ? node.children[node.children.length - 1].event.timestamp_ms - node.event.timestamp_ms
+          : undefined;
+
+        return (
+          <div key={i} className="trace-node">
+            <div
+              className={`trace-row trace-kind-${node.event.kind} ${isSelected ? 'trace-row-selected' : ''}`}
+              onClick={(e) => {
+                if (hasChildren && !e.shiftKey) {
+                  toggleExpand(i);
+                }
+                toggleSelect(nodeKey);
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              {hasChildren ? (
+                isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
+              ) : <span className="trace-spacer" />}
+              <TraceIcon kind={node.event.kind} />
+              <span className="trace-label">{node.event.agent || node.event.name}</span>
+              <span className="trace-msg">{node.event.message}</span>
+              {agentDuration !== undefined && agentDuration > 0 && (
+                <span className="trace-timing">{formatMs(agentDuration)}</span>
+              )}
+              {hasChildren && <span className="trace-badge">{node.children.length}</span>}
+            </div>
+            {isSelected && (
+              <TraceDetail event={node.event} duration={agentDuration} />
+            )}
+            {hasChildren && isExpanded && (
+              <div className="trace-children">
+                {node.children.map((child, j) => {
+                  const childKey = `child-${i}-${j}`;
+                  const isChildSelected = selected === childKey;
+                  // Duration between consecutive children
+                  const prevTs = j > 0 ? node.children[j - 1].event.timestamp_ms : node.event.timestamp_ms;
+                  const childDuration = child.event.timestamp_ms - prevTs;
+
+                  return (
+                    <div key={j}>
+                      <div
+                        className={`trace-row trace-child trace-kind-${child.event.kind} ${isChildSelected ? 'trace-row-selected' : ''}`}
+                        onClick={() => toggleSelect(childKey)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <span className="trace-spacer" />
+                        <TraceIcon kind={child.event.kind} />
+                        <span className="trace-label">
+                          {child.event.tool || child.event.name}
+                        </span>
+                        <span className="trace-msg">{child.event.message}</span>
+                        {child.event.detail && (
+                          <span className="trace-detail-inline">{child.event.detail}</span>
+                        )}
+                        {childDuration > 0 && (
+                          <span className="trace-timing">{formatMs(childDuration)}</span>
+                        )}
+                      </div>
+                      {isChildSelected && (
+                        <TraceDetail event={child.event} duration={childDuration > 0 ? childDuration : undefined} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function App() {
   const [examples, setExamples] = useState<Example[]>([]);
@@ -30,30 +250,32 @@ function App() {
   const [result, setResult] = useState<RunResult | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [serverMode, setServerMode] = useState<ServerInfo | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState<'output' | 'trace'>('output');
   const runRef = useRef<() => void>(undefined);
+
+  const isPublic = serverMode?.mode === 'public';
 
   const runCode = useCallback(async () => {
     if (running || !code.trim()) return;
+    if (isPublic && !selectedId) return;
     setRunning(true);
     setResult(null);
+    setActiveTab('output');
     try {
       const res = await fetch(`${API}/api/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, example_id: selectedId }),
+        body: JSON.stringify({ code, example_id: selectedId || 'custom' }),
       });
       const data: RunResult = await res.json();
       setResult(data);
     } catch (e) {
-      setResult({
-        success: false,
-        stdout: '',
-        stderr: `Connection error: ${e}`,
-        duration_ms: 0,
-      });
+      setResult({ success: false, stdout: '', stderr: `Connection error: ${e}`, duration_ms: 0 });
     }
     setRunning(false);
-  }, [code, selectedId, running]);
+  }, [code, selectedId, running, isPublic]);
 
   runRef.current = runCode;
 
@@ -61,7 +283,10 @@ function App() {
     fetch(`${API}/api/health`)
       .then(() => setBackendStatus('online'))
       .catch(() => setBackendStatus('offline'));
-
+    fetch(`${API}/api/info`)
+      .then(r => r.json())
+      .then((info: ServerInfo) => setServerMode(info))
+      .catch(() => {});
     fetch(`${API}/api/examples`)
       .then(r => r.json())
       .then((data: Example[]) => {
@@ -102,7 +327,12 @@ function App() {
     setResult(null);
   };
 
+  const toggleCategory = (cat: string) => {
+    setCollapsed(prev => ({ ...prev, [cat]: !prev[cat] }));
+  };
+
   const categories = [...new Set(examples.map(e => e.category))];
+  const traceCount = result?.traces?.length ?? 0;
 
   return (
     <div className="app">
@@ -111,6 +341,14 @@ function App() {
           <h1>⚡ ADK Playground</h1>
           <span className="subtitle">Rust Agent Development Kit</span>
           <span className={`status-dot ${backendStatus}`} title={`Backend: ${backendStatus}`} />
+          {serverMode && (
+            <span className={`mode-badge ${serverMode.mode}`} title={
+              isPublic ? 'Public mode — only registered examples can run' : 'Local mode — custom code enabled'
+            }>
+              {isPublic ? <Lock size={10} /> : <Globe size={10} />}
+              {serverMode.mode}
+            </span>
+          )}
         </div>
         <div className="header-right">
           <span className="shortcut-hint">
@@ -136,24 +374,31 @@ function App() {
               <span>Examples</span>
               <span className="example-count">{examples.length}</span>
             </div>
-            {categories.map(cat => (
-              <div key={cat} className="category">
-                <div className="category-name">{cat}</div>
-                {examples.filter(e => e.category === cat).map(ex => (
-                  <button
-                    key={ex.id}
-                    className={`example-btn ${selectedId === ex.id ? 'active' : ''}`}
-                    onClick={() => selectExample(ex)}
-                  >
-                    <ChevronRight size={14} />
-                    <div>
-                      <div className="example-name">{ex.name}</div>
-                      <div className="example-desc">{ex.description}</div>
-                    </div>
+            {categories.map(cat => {
+              const catExamples = examples.filter(e => e.category === cat);
+              const isCollapsed = collapsed[cat] ?? false;
+              return (
+                <div key={cat} className="category">
+                  <button className="category-toggle" onClick={() => toggleCategory(cat)}>
+                    {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                    <span className="category-name">{cat}</span>
+                    <span className="category-count">{catExamples.length}</span>
                   </button>
-                ))}
-              </div>
-            ))}
+                  {!isCollapsed && catExamples.map(ex => (
+                    <button
+                      key={ex.id}
+                      className={`example-btn ${selectedId === ex.id ? 'active' : ''}`}
+                      onClick={() => selectExample(ex)}
+                    >
+                      <div>
+                        <div className="example-name">{ex.name}</div>
+                        <div className="example-desc">{ex.description}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
           </aside>
         )}
 
@@ -179,7 +424,7 @@ function App() {
               defaultLanguage="rust"
               theme="vs-dark"
               value={code}
-              onChange={(v) => setCode(v || '')}
+              onChange={(v) => { if (!isPublic) setCode(v || ''); }}
               onMount={handleEditorMount}
               options={{
                 fontSize: 14,
@@ -195,56 +440,94 @@ function App() {
                 cursorBlinking: 'smooth',
                 cursorSmoothCaretAnimation: 'on',
                 bracketPairColorization: { enabled: true },
+                readOnly: isPublic,
               }}
             />
           </div>
         </div>
 
         <div className="output-area">
-          <div className="output-header">
-            <Terminal size={14} />
-            <span>Output</span>
-            {result && (
-              result.success
-                ? <CheckCircle size={14} className="success-icon" />
-                : <XCircle size={14} className="error-icon" />
-            )}
+          <div className="output-tabs">
+            <button
+              className={`output-tab ${activeTab === 'output' ? 'active' : ''}`}
+              onClick={() => setActiveTab('output')}
+            >
+              <Terminal size={13} />
+              Output
+              {result && (
+                result.success
+                  ? <CheckCircle size={12} className="success-icon" />
+                  : <XCircle size={12} className="error-icon" />
+              )}
+            </button>
+            <button
+              className={`output-tab ${activeTab === 'trace' ? 'active' : ''}`}
+              onClick={() => setActiveTab('trace')}
+            >
+              <Activity size={13} />
+              Trace
+              {traceCount > 0 && <span className="trace-count">{traceCount}</span>}
+            </button>
             {result && (
               <button className="clear-btn" onClick={() => setResult(null)}>Clear</button>
             )}
           </div>
+
           <div className="output-content">
-            {backendStatus === 'offline' && !running && !result && (
-              <div className="output-placeholder offline">
-                <XCircle size={20} />
-                <div>
-                  <div>Backend offline</div>
-                  <code>cargo run --manifest-path playground/backend/Cargo.toml</code>
-                </div>
-              </div>
-            )}
-            {backendStatus !== 'offline' && !result && !running && (
-              <div className="output-placeholder">
-                Click <strong>Run</strong> or press <strong>{MOD_KEY}+Enter</strong>
-              </div>
-            )}
-            {running && (
-              <div className="output-placeholder running">
-                <Loader2 size={20} className="spin" />
-                <div>
-                  <div>Compiling and running...</div>
-                  <div className="output-sub">First builds take longer</div>
-                </div>
-              </div>
-            )}
-            {result && (
-              <pre className={`output-text ${result.success ? '' : 'error'}`}>
-                {result.stdout && <span className="stdout">{result.stdout}</span>}
-                {result.stderr && <span className="stderr">{result.stderr}</span>}
-                {!result.stdout && !result.stderr && (
-                  <span className="stdout">(no output)</span>
+            {activeTab === 'output' && (
+              <>
+                {backendStatus === 'offline' && !running && !result && (
+                  <div className="output-placeholder offline">
+                    <XCircle size={20} />
+                    <div>
+                      <div>Backend offline</div>
+                      <code>cargo run --manifest-path playground/backend/Cargo.toml</code>
+                    </div>
+                  </div>
                 )}
-              </pre>
+                {backendStatus !== 'offline' && !result && !running && (
+                  <div className="output-placeholder">
+                    Click <strong>Run</strong> or press <strong>{MOD_KEY}+Enter</strong>
+                  </div>
+                )}
+                {running && (
+                  <div className="output-placeholder running">
+                    <Loader2 size={20} className="spin" />
+                    <div>
+                      <div>Compiling and running...</div>
+                      <div className="output-sub">First builds take longer</div>
+                    </div>
+                  </div>
+                )}
+                {result && (
+                  <pre className={`output-text ${result.success ? '' : 'error'}`}>
+                    {result.stdout && <span className="stdout">{result.stdout}</span>}
+                    {result.stderr && <span className="stderr">{result.stderr}</span>}
+                    {!result.stdout && !result.stderr && (
+                      <span className="stdout">(no output)</span>
+                    )}
+                  </pre>
+                )}
+              </>
+            )}
+            {activeTab === 'trace' && (
+              <>
+                {!result && !running && (
+                  <div className="output-placeholder">
+                    <Activity size={20} />
+                    Run an example to see execution traces
+                  </div>
+                )}
+                {running && (
+                  <div className="output-placeholder running">
+                    <Loader2 size={20} className="spin" />
+                    <div>Collecting traces...</div>
+                  </div>
+                )}
+                {result && (
+                  <TraceTree traces={result.traces || []} />
+                )}
+              </>
             )}
           </div>
         </div>

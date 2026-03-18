@@ -95,7 +95,8 @@ Resources:
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
-            set -euo pipefail
+            set -eo pipefail
+            export HOME=/root
             exec > /var/log/adk-setup.log 2>&1
             echo "=== ADK Playground Setup $(date) ==="
 
@@ -106,7 +107,7 @@ Resources:
             dnf install -y gcc openssl-devel pkg-config git
 
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0
-            source /root/.cargo/env
+            export PATH="/root/.cargo/bin:$PATH"
 
             # Install Caddy from binary
             curl -sL "https://caddyserver.com/api/download?os=linux&arch=arm64" -o /usr/bin/caddy
@@ -133,6 +134,7 @@ Resources:
             Type=simple
             WorkingDirectory=/opt/playground/playground/backend
             EnvironmentFile=/opt/playground/.env
+            Environment=PATH=/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             ExecStart=/opt/playground/playground/backend/target/release/adk-playground-server
             Restart=always
             RestartSec=3
@@ -144,7 +146,7 @@ Resources:
             systemctl enable --now adk-playground
 
             cat > /etc/caddy/Caddyfile <<EOF
-            :80 {
+            playground.adk-rust.com {
               reverse_proxy localhost:8080
             }
             EOF

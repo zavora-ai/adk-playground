@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
-import { Play, Loader2, BookOpen, ChevronRight, ChevronDown, Terminal, Clock, CheckCircle, XCircle, Keyboard, Lock, Globe, Activity, Cpu, Wrench, MessageSquare, AlertTriangle, Bot } from 'lucide-react';
+import { Play, Loader2, BookOpen, ChevronRight, ChevronDown, Terminal, Clock, CheckCircle, XCircle, Keyboard, Lock, Globe, Activity, Cpu, Wrench, MessageSquare, AlertTriangle, Bot, Github, Star } from 'lucide-react';
 import './App.css';
 
 interface Example {
@@ -351,6 +351,11 @@ function App() {
           )}
         </div>
         <div className="header-right">
+          <a href="https://github.com/zavora-ai/adk-rust" target="_blank" rel="noopener noreferrer" className="github-star-link">
+            <Github size={15} />
+            <Star size={12} className="star-icon" />
+            Star on GitHub
+          </a>
           <span className="shortcut-hint">
             <Keyboard size={12} />
             {MOD_KEY}+Enter

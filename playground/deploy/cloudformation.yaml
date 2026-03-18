@@ -106,7 +106,7 @@ Resources:
             dnf update -y
             dnf install -y gcc openssl-devel pkg-config git
 
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.91.1
             export PATH="/root/.cargo/bin:$PATH"
 
             # Install Caddy from binary
@@ -172,8 +172,7 @@ Resources:
             [package]
             name = "playground-run"
             version = "0.1.0"
-            edition = "2024"
-            rust-version = "1.85.0"
+            edition = "2021"
             [dependencies]
             adk-rust = { version = "0.4.0", default-features = false, features = ["full"] }
             adk-tool = "0.4.0"

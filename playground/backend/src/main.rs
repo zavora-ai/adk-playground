@@ -126,8 +126,7 @@ async fn run_code(
         let cargo_toml = r#"[package]
 name = "playground-run"
 version = "0.1.0"
-edition = "2024"
-rust-version = "1.85.0"
+edition = "2021"
 
 [dependencies]
 adk-rust = { version = "0.4.0", default-features = false, features = ["full"] }

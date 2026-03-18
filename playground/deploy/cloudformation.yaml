@@ -103,6 +103,13 @@ Resources:
             INSTANCE_ID=$(ec2-metadata -i | cut -d' ' -f2)
             aws ec2 associate-address --instance-id "$INSTANCE_ID" --allocation-id "${ElasticIP.AllocationId}" --region ${AWS::Region} || true
 
+            # Create 4GB swap to prevent OOM during compilation
+            fallocate -l 4G /swapfile
+            chmod 600 /swapfile
+            mkswap /swapfile
+            swapon /swapfile
+            echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
+
             dnf update -y
             dnf install -y gcc openssl-devel pkg-config git dbus-devel
 

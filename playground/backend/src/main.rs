@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
@@ -127,6 +129,7 @@ async fn run_code(
         duration_ms: ms, traces: Vec::new(), summary: None,
     };
 
+    // Ensure workspace exists with Cargo.toml
     if !workspace.join("Cargo.toml").exists() {
         if let Err(e) = tokio::fs::create_dir_all(workspace.join("src")).await {
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to create workspace: {e}"), 0)));
@@ -154,10 +157,22 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
     }
 
     let code_with_tracing = inject_tracing_init(&code);
+
+    // Hash the source to detect changes
+    let mut hasher = DefaultHasher::new();
+    code_with_tracing.hash(&mut hasher);
+    let source_hash = hasher.finish();
+
+    let binary_path = workspace.join("target/debug/playground-run");
+    let mut last_hash = state.last_source_hash.lock().await;
+    let needs_build = *last_hash != Some(source_hash) || !binary_path.exists();
+
+    // Write source
     if let Err(e) = tokio::fs::write(workspace.join("src/main.rs"), &code_with_tracing).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to write source: {e}"), 0)));
     }
 
+    // Write .env
     let mut env_lines = Vec::new();
     for key in ["GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
         if let Ok(val) = std::env::var(key) { env_lines.push(format!("{key}={val}")); }
@@ -166,30 +181,38 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
         let _ = tokio::fs::write(workspace.join(".env"), env_lines.join("\n")).await;
     }
 
-    // --- Build phase ---
     let start = std::time::Instant::now();
-    let build_output = tokio::time::timeout(
-        std::time::Duration::from_secs(300),
-        Command::new("cargo").arg("build").current_dir(workspace)
-            .stdout(Stdio::piped()).stderr(Stdio::piped()).output(),
-    ).await;
-    let compile_ms = start.elapsed().as_millis() as u64;
+    let mut compile_ms = 0u64;
 
-    let build_result = match build_output {
-        Ok(Ok(o)) => o,
-        Ok(Err(e)) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to run cargo: {e}"), compile_ms))),
-        Err(_) => return (StatusCode::OK, Json(err("Build timed out (5 min limit).".into(), compile_ms))),
-    };
-    if !build_result.status.success() {
-        let stderr = String::from_utf8_lossy(&build_result.stderr).to_string();
-        return (StatusCode::OK, Json(err(format!("Compilation failed:\n{stderr}"), compile_ms)));
+    // --- Build phase (only if source changed) ---
+    if needs_build {
+        let build_output = tokio::time::timeout(
+            std::time::Duration::from_secs(300),
+            Command::new("cargo").arg("build").current_dir(workspace)
+                .stdout(Stdio::piped()).stderr(Stdio::piped()).output(),
+        ).await;
+        compile_ms = start.elapsed().as_millis() as u64;
+
+        let build_result = match build_output {
+            Ok(Ok(o)) => o,
+            Ok(Err(e)) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to run cargo: {e}"), compile_ms))),
+            Err(_) => return (StatusCode::OK, Json(err("Build timed out (5 min limit).".into(), compile_ms))),
+        };
+        if !build_result.status.success() {
+            let stderr = String::from_utf8_lossy(&build_result.stderr).to_string();
+            *last_hash = None; // Force rebuild next time
+            return (StatusCode::OK, Json(err(format!("Compilation failed:\n{stderr}"), compile_ms)));
+        }
+        *last_hash = Some(source_hash);
     }
 
-    // --- Run phase ---
+    // --- Run phase: execute binary directly (no cargo overhead) ---
     let run_start = std::time::Instant::now();
-    let mut run_cmd = Command::new("cargo");
-    run_cmd.arg("run").current_dir(workspace)
-        .stdout(Stdio::piped()).stderr(Stdio::piped())
+    let mut run_cmd = Command::new(&binary_path);
+    run_cmd
+        .current_dir(workspace)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .env("RUST_LOG", "info,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn");
     for key in ["GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
         if let Ok(val) = std::env::var(key) { run_cmd.env(key, val); }
@@ -573,6 +596,7 @@ async fn server_info() -> Json<serde_json::Value> {
 struct AppState {
     workspace_dir: PathBuf,
     build_lock: Arc<Mutex<()>>,
+    last_source_hash: Arc<Mutex<Option<u64>>>,
 }
 
 #[tokio::main]
@@ -584,6 +608,7 @@ async fn main() {
     let state = AppState {
         workspace_dir: PathBuf::from("/var/tmp/adk-playground-workspace"),
         build_lock: Arc::new(Mutex::new(())),
+        last_source_hash: Arc::new(Mutex::new(None)),
     };
 
     let cors = CorsLayer::new()

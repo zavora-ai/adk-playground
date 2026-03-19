@@ -212,11 +212,9 @@ async fn run_code(
         Ok(Ok(output)) => {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let raw_stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let (stderr, traces) = if output.status.success() {
-                parse_traces(&raw_stderr, 0)
-            } else {
-                (raw_stderr, Vec::new())
-            };
+            // Always parse traces — even on failure — so the Trace tab works
+            // and the Output tab shows clean error text instead of raw JSON
+            let (stderr, traces) = parse_traces(&raw_stderr, 0);
             let model = extract_model_from_code(&code);
             let (input_tokens, output_tokens, total_tokens) = extract_token_usage(&stdout);
             let cost_estimate = estimate_cost(model.as_deref(), input_tokens, output_tokens);

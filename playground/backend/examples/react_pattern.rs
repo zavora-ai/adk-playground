@@ -73,11 +73,15 @@ async fn main() -> anyhow::Result<()> {
             for event in events {
                 if let Some(content) = event.content() {
                     for part in &content.parts {
-                        if part.function_call().is_some() {
-                            has_tool_calls = true;
-                        }
-                        if let Some(text) = part.text() {
-                            response.push_str(text);
+                        match part {
+                            Part::FunctionCall { name, .. } => {
+                                println!("🔧 Tool called: {}", name);
+                                has_tool_calls = true;
+                            }
+                            Part::Text { text } => {
+                                response.push_str(text);
+                            }
+                            _ => {}
                         }
                     }
                 }

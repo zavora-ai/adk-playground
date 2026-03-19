@@ -133,10 +133,27 @@ Resources:
             PORT=8080
             EOF
 
+            # Update service: pulls latest code + rebuilds before playground starts
+            cat > /etc/systemd/system/adk-playground-update.service <<EOF
+            [Unit]
+            Description=ADK Playground - Git Pull & Build
+            After=network-online.target
+            Wants=network-online.target
+            [Service]
+            Type=oneshot
+            Environment=PATH=/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            WorkingDirectory=/opt/playground
+            ExecStart=/bin/bash -c 'git pull origin main 2>&1 && cd playground/backend && cargo build --release 2>&1'
+            TimeoutStartSec=600
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
             cat > /etc/systemd/system/adk-playground.service <<EOF
             [Unit]
             Description=ADK Playground
-            After=network.target
+            After=network.target adk-playground-update.service
+            Requires=adk-playground-update.service
             [Service]
             Type=simple
             WorkingDirectory=/opt/playground/playground/backend
@@ -150,6 +167,7 @@ Resources:
             EOF
 
             systemctl daemon-reload
+            systemctl enable adk-playground-update
             systemctl enable --now adk-playground
 
             cat > /etc/caddy/Caddyfile <<EOF

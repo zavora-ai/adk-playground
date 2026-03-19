@@ -348,6 +348,58 @@ body {
   background: var(--bg);
 }
 
+/* Summary bar */
+.summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  flex-wrap: wrap;
+}
+.summary-bar.success { border-left: 2px solid var(--green); }
+.summary-bar.error { border-left: 2px solid var(--red); }
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-dim);
+}
+.summary-label {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.summary-value {
+  color: var(--text);
+  font-weight: 600;
+}
+.summary-model {
+  color: var(--accent);
+  font-weight: 500;
+}
+.summary-sep {
+  color: var(--text-dim);
+  opacity: 0.5;
+  margin: 0 1px;
+}
+.summary-cost {
+  margin-left: auto;
+  color: var(--green);
+}
+.summary-cost .summary-value {
+  color: var(--green);
+}
+.summary-item svg {
+  opacity: 0.6;
+}
+
 .output-placeholder {
   display: flex;
   align-items: center;

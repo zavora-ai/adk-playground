@@ -27,7 +27,23 @@ fn default_example() -> String {
     "custom".into()
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
+struct RunSummary {
+    compile_ms: u64,
+    run_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    output_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    total_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cost_estimate: Option<f64>,
+}
+
+#[derive(Serialize, Clone)]
 struct RunResponse {
     success: bool,
     stdout: String,
@@ -35,6 +51,8 @@ struct RunResponse {
     duration_ms: u64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     traces: Vec<TraceEvent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    summary: Option<RunSummary>,
 }
 
 #[derive(Serialize, Clone)]
@@ -74,7 +92,6 @@ async fn list_examples() -> Json<Vec<examples::Example>> {
 /// Returns Ok(code) or Err(response) if rejected.
 fn resolve_code(req: &RunRequest) -> Result<String, RunResponse> {
     if is_public_mode() {
-        // Public mode: only allow registered examples
         let examples = examples::load_examples();
         if let Some(ex) = examples.iter().find(|e| e.id == req.example_id) {
             Ok(ex.code.clone())
@@ -87,10 +104,10 @@ fn resolve_code(req: &RunRequest) -> Result<String, RunResponse> {
                     .into(),
                 duration_ms: 0,
                 traces: Vec::new(),
+                summary: None,
             })
         }
     } else {
-        // Local mode: run whatever code the user sends
         Ok(req.code.clone())
     }
 }
@@ -99,30 +116,21 @@ async fn run_code(
     state: axum::extract::State<AppState>,
     Json(req): Json<RunRequest>,
 ) -> impl IntoResponse {
-    // Resolve code (enforces public mode restrictions)
     let code = match resolve_code(&req) {
         Ok(c) => c,
         Err(resp) => return (StatusCode::OK, Json(resp)),
     };
-
     let workspace = &state.workspace_dir;
     let _lock = state.build_lock.lock().await;
+    let err = |s: String, ms: u64| RunResponse {
+        success: false, stdout: String::new(), stderr: s,
+        duration_ms: ms, traces: Vec::new(), summary: None,
+    };
 
-    // Create workspace with Cargo.toml on first run
     if !workspace.join("Cargo.toml").exists() {
         if let Err(e) = tokio::fs::create_dir_all(workspace.join("src")).await {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(RunResponse {
-                    success: false,
-                    stdout: String::new(),
-                    stderr: format!("Failed to create workspace: {}", e),
-                    duration_ms: 0,
-                    traces: Vec::new(),
-                }),
-            );
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to create workspace: {e}"), 0)));
         }
-
         let cargo_toml = r#"[package]
 name = "playground-run"
 version = "0.1.0"
@@ -140,125 +148,55 @@ anyhow = "1"
 dotenvy = "0.15"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 "#;
-
         if let Err(e) = tokio::fs::write(workspace.join("Cargo.toml"), cargo_toml).await {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(RunResponse {
-                    success: false,
-                    stdout: String::new(),
-                    stderr: format!("Failed to write Cargo.toml: {}", e),
-                    duration_ms: 0,
-                    traces: Vec::new(),
-                }),
-            );
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to write Cargo.toml: {e}"), 0)));
         }
     }
 
-    // Inject tracing subscriber init into the code
     let code_with_tracing = inject_tracing_init(&code);
-
     if let Err(e) = tokio::fs::write(workspace.join("src/main.rs"), &code_with_tracing).await {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(RunResponse {
-                success: false,
-                stdout: String::new(),
-                stderr: format!("Failed to write source: {}", e),
-                duration_ms: 0,
-                traces: Vec::new(),
-            }),
-        );
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to write source: {e}"), 0)));
     }
 
-    // Forward API keys
     let mut env_lines = Vec::new();
     for key in ["GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
-        if let Ok(val) = std::env::var(key) {
-            env_lines.push(format!("{}={}", key, val));
-        }
+        if let Ok(val) = std::env::var(key) { env_lines.push(format!("{key}={val}")); }
     }
     if !env_lines.is_empty() {
         let _ = tokio::fs::write(workspace.join(".env"), env_lines.join("\n")).await;
     }
 
+    // --- Build phase ---
     let start = std::time::Instant::now();
-
-    // Build (5 min timeout for first build)
     let build_output = tokio::time::timeout(
         std::time::Duration::from_secs(300),
-        Command::new("cargo")
-            .arg("build")
-            .current_dir(workspace)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output(),
-    )
-    .await;
+        Command::new("cargo").arg("build").current_dir(workspace)
+            .stdout(Stdio::piped()).stderr(Stdio::piped()).output(),
+    ).await;
+    let compile_ms = start.elapsed().as_millis() as u64;
 
     let build_result = match build_output {
         Ok(Ok(o)) => o,
-        Ok(Err(e)) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(RunResponse {
-                    success: false,
-                    stdout: String::new(),
-                    stderr: format!("Failed to run cargo: {}", e),
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    traces: Vec::new(),
-                }),
-            )
-        }
-        Err(_) => {
-            return (
-                StatusCode::OK,
-                Json(RunResponse {
-                    success: false,
-                    stdout: String::new(),
-                    stderr: "Build timed out (5 min limit). First builds take longer.".into(),
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    traces: Vec::new(),
-                }),
-            )
-        }
+        Ok(Err(e)) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to run cargo: {e}"), compile_ms))),
+        Err(_) => return (StatusCode::OK, Json(err("Build timed out (5 min limit).".into(), compile_ms))),
     };
-
     if !build_result.status.success() {
         let stderr = String::from_utf8_lossy(&build_result.stderr).to_string();
-        return (
-            StatusCode::OK,
-            Json(RunResponse {
-                success: false,
-                stdout: String::new(),
-                stderr: format!("Compilation failed:\n{}", stderr),
-                duration_ms: start.elapsed().as_millis() as u64,
-                traces: Vec::new(),
-            }),
-        );
+        return (StatusCode::OK, Json(err(format!("Compilation failed:\n{stderr}"), compile_ms)));
     }
 
-    // Run with 30s timeout
+    // --- Run phase ---
+    let run_start = std::time::Instant::now();
     let mut run_cmd = Command::new("cargo");
-    run_cmd
-        .arg("run")
-        .current_dir(workspace)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+    run_cmd.arg("run").current_dir(workspace)
+        .stdout(Stdio::piped()).stderr(Stdio::piped())
         .env("RUST_LOG", "info,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn");
-
     for key in ["GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
-        if let Ok(val) = std::env::var(key) {
-            run_cmd.env(key, val);
-        }
+        if let Ok(val) = std::env::var(key) { run_cmd.env(key, val); }
     }
 
-    let run_output = tokio::time::timeout(
-        std::time::Duration::from_secs(30),
-        run_cmd.output(),
-    )
-    .await;
-
+    let run_output = tokio::time::timeout(std::time::Duration::from_secs(30), run_cmd.output()).await;
+    let run_ms = run_start.elapsed().as_millis() as u64;
     let duration_ms = start.elapsed().as_millis() as u64;
 
     match run_output {
@@ -270,40 +208,110 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
             } else {
                 (raw_stderr, Vec::new())
             };
-            (
-                StatusCode::OK,
-                Json(RunResponse {
-                    success: output.status.success(),
-                    stdout,
-                    stderr,
-                    duration_ms,
-                    traces,
-                }),
-            )
+            let model = extract_model_from_code(&code);
+            let (input_tokens, output_tokens, total_tokens) = extract_token_usage(&stdout);
+            let cost_estimate = estimate_cost(model.as_deref(), input_tokens, output_tokens);
+            let summary = Some(RunSummary {
+                compile_ms, run_ms, model, input_tokens, output_tokens, total_tokens, cost_estimate,
+            });
+            (StatusCode::OK, Json(RunResponse {
+                success: output.status.success(), stdout, stderr, duration_ms, traces, summary,
+            }))
         }
-        Ok(Err(e)) => (
-            StatusCode::OK,
-            Json(RunResponse {
-                success: false,
-                stdout: String::new(),
-                stderr: format!("Run failed: {}", e),
-                duration_ms,
-                traces: Vec::new(),
-            }),
-        ),
-        Err(_) => (
-            StatusCode::OK,
-            Json(RunResponse {
-                success: false,
-                stdout: String::new(),
-                stderr: "Execution timed out (30s limit)".into(),
-                duration_ms,
-                traces: Vec::new(),
-            }),
-        ),
+        Ok(Err(e)) => (StatusCode::OK, Json(err(format!("Run failed: {e}"), duration_ms))),
+        Err(_) => (StatusCode::OK, Json(err("Execution timed out (30s limit)".into(), duration_ms))),
     }
 }
 
+
+/// Extract model name from user code by looking for common patterns
+fn extract_model_from_code(code: &str) -> Option<String> {
+    let patterns = [".model(\"", "model: \"", "\"model\": \""];
+    for pat in &patterns {
+        if let Some(pos) = code.find(pat) {
+            let after = &code[pos + pat.len()..];
+            if let Some(end) = after.find('"') {
+                let model = &after[..end];
+                if !model.is_empty() && model.len() < 60 {
+                    return Some(model.to_string());
+                }
+            }
+        }
+    }
+    // GeminiModel::new(&key, "model")
+    if let Some(pos) = code.find("GeminiModel::new(") {
+        let after = &code[pos..];
+        let mut in_quotes = false;
+        let mut count = 0;
+        for (i, c) in after.char_indices() {
+            if c == '"' {
+                if in_quotes { count += 1; if count == 2 { /* skip first string (key) */ } }
+                in_quotes = !in_quotes;
+            }
+            if count >= 2 && c == '"' {
+                let rest = &after[i + 1..];
+                if let Some(end) = rest.find('"') {
+                    return Some(rest[..end].to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract token usage from stdout
+fn extract_token_usage(stdout: &str) -> (Option<u64>, Option<u64>, Option<u64>) {
+    let mut input = None;
+    let mut output = None;
+    let mut total = None;
+
+    for line in stdout.lines() {
+        let lower = line.to_lowercase();
+        if lower.contains("prompt") && lower.contains("token") {
+            if let Some(n) = extract_last_number(line) { input = Some(n); }
+        } else if (lower.contains("candidate") || lower.contains("output") || lower.contains("completion"))
+            && lower.contains("token")
+        {
+            if let Some(n) = extract_last_number(line) { output = Some(n); }
+        } else if lower.contains("total") && lower.contains("token") {
+            if let Some(n) = extract_last_number(line) { total = Some(n); }
+        } else if lower.contains("input:") && lower.contains("output:") {
+            for p in line.split(',') {
+                let pl = p.to_lowercase();
+                if pl.contains("input") { if let Some(n) = extract_last_number(p) { input = Some(n); } }
+                if pl.contains("output") { if let Some(n) = extract_last_number(p) { output = Some(n); } }
+            }
+        }
+    }
+    if total.is_none() {
+        if let (Some(i), Some(o)) = (input, output) { total = Some(i + o); }
+    }
+    (input, output, total)
+}
+
+fn extract_last_number(s: &str) -> Option<u64> {
+    s.split(|c: char| !c.is_ascii_digit())
+        .filter(|w| !w.is_empty())
+        .filter_map(|w| w.parse::<u64>().ok())
+        .last()
+}
+
+/// Estimate cost in USD based on model pricing
+fn estimate_cost(model: Option<&str>, input_tokens: Option<u64>, output_tokens: Option<u64>) -> Option<f64> {
+    let (inp, out) = (input_tokens?, output_tokens?);
+    // Prices per 1M tokens: (input, output)
+    let (ip, op) = match model? {
+        m if m.contains("flash-lite") => (0.25, 1.50),
+        m if m.contains("flash") => (0.15, 0.60),
+        m if m.contains("pro") => (1.25, 5.00),
+        m if m.contains("gpt-4o-mini") => (0.15, 0.60),
+        m if m.contains("gpt-4o") => (2.50, 10.00),
+        m if m.contains("claude-3-5-haiku") => (0.80, 4.00),
+        m if m.contains("claude-3-5-sonnet") || m.contains("claude-3-7-sonnet") => (3.00, 15.00),
+        _ => return None,
+    };
+    Some((inp as f64 * ip + out as f64 * op) / 1_000_000.0)
+}
 
 /// Inject a JSON tracing subscriber init into user code so we capture structured traces.
 fn inject_tracing_init(code: &str) -> String {

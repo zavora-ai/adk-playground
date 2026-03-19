@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
-import { Play, Loader2, BookOpen, ChevronRight, ChevronDown, Terminal, Clock, CheckCircle, XCircle, Keyboard, Lock, Globe, Activity, Cpu, Wrench, MessageSquare, AlertTriangle, Bot, Github, Star } from 'lucide-react';
+import { Play, Loader2, BookOpen, ChevronRight, ChevronDown, Terminal, Clock, CheckCircle, XCircle, Keyboard, Lock, Globe, Activity, Cpu, Wrench, MessageSquare, AlertTriangle, Bot, Github, Star, Zap, DollarSign, Hash } from 'lucide-react';
 import './App.css';
 
 interface Example {
@@ -23,12 +23,23 @@ interface TraceEvent {
   target?: string;
 }
 
+interface RunSummary {
+  compile_ms: number;
+  run_ms: number;
+  model?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  cost_estimate?: number;
+}
+
 interface RunResult {
   success: boolean;
   stdout: string;
   stderr: string;
   duration_ms: number;
   traces?: TraceEvent[];
+  summary?: RunSummary;
 }
 
 interface ServerInfo {
@@ -238,6 +249,53 @@ function TraceTree({ traces }: { traces: TraceEvent[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function SummaryBar({ summary, success }: { summary: RunSummary; success: boolean }) {
+  const fmtMs = (ms: number) => ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+  const fmtTokens = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+  const fmtCost = (c: number) => c < 0.01 ? `<$0.01` : `$${c.toFixed(4)}`;
+
+  return (
+    <div className={`summary-bar ${success ? 'success' : 'error'}`}>
+      <div className="summary-item">
+        <Zap size={11} />
+        <span className="summary-label">Compile</span>
+        <span className="summary-value">{fmtMs(summary.compile_ms)}</span>
+      </div>
+      <div className="summary-item">
+        <Play size={11} />
+        <span className="summary-label">Run</span>
+        <span className="summary-value">{fmtMs(summary.run_ms)}</span>
+      </div>
+      {summary.model && (
+        <div className="summary-item">
+          <Cpu size={11} />
+          <span className="summary-value summary-model">{summary.model}</span>
+        </div>
+      )}
+      {summary.input_tokens != null && (
+        <div className="summary-item">
+          <Hash size={11} />
+          <span className="summary-label">In</span>
+          <span className="summary-value">{fmtTokens(summary.input_tokens)}</span>
+          {summary.output_tokens != null && (
+            <>
+              <span className="summary-sep">/</span>
+              <span className="summary-label">Out</span>
+              <span className="summary-value">{fmtTokens(summary.output_tokens)}</span>
+            </>
+          )}
+        </div>
+      )}
+      {summary.cost_estimate != null && (
+        <div className="summary-item summary-cost">
+          <DollarSign size={11} />
+          <span className="summary-value">{fmtCost(summary.cost_estimate)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -479,6 +537,9 @@ function App() {
           </div>
 
           <div className="output-content">
+            {result?.summary && (
+              <SummaryBar summary={result.summary} success={result.success} />
+            )}
             {activeTab === 'output' && (
               <>
                 {backendStatus === 'offline' && !running && !result && (

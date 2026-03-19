@@ -8,11 +8,12 @@ use axum::{
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
@@ -129,63 +130,29 @@ async fn run_code(
         duration_ms: ms, traces: Vec::new(), summary: None,
     };
 
-    // Ensure workspace exists with Cargo.toml
-    if !workspace.join("Cargo.toml").exists() {
-        if let Err(e) = tokio::fs::create_dir_all(workspace.join("src")).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to create workspace: {e}"), 0)));
-        }
-        let cargo_toml = r#"[package]
-name = "playground-run"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-adk-rust = { version = "0.4.0", default-features = false, features = ["full"] }
-adk-tool = "0.4.0"
-tokio = { version = "1", features = ["full"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-schemars = "0.8"
-async-trait = "0.1"
-anyhow = "1"
-dotenvy = "0.15"
-tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
-"#;
-        if let Err(e) = tokio::fs::write(workspace.join("Cargo.toml"), cargo_toml).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to write Cargo.toml: {e}"), 0)));
-        }
-    }
-
     let code_with_tracing = inject_tracing_init(&code);
+    let source_hash = hash_source(&code_with_tracing);
 
-    // Hash the source to detect changes
-    let mut hasher = DefaultHasher::new();
-    code_with_tracing.hash(&mut hasher);
-    let source_hash = hasher.finish();
-
-    let binary_path = workspace.join("target/debug/playground-run");
-    let mut last_hash = state.last_source_hash.lock().await;
-    let needs_build = *last_hash != Some(source_hash) || !binary_path.exists();
-
-    // Write source
-    if let Err(e) = tokio::fs::write(workspace.join("src/main.rs"), &code_with_tracing).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to write source: {e}"), 0)));
-    }
-
-    // Write .env
-    let mut env_lines = Vec::new();
-    for key in ["GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
-        if let Ok(val) = std::env::var(key) { env_lines.push(format!("{key}={val}")); }
-    }
-    if !env_lines.is_empty() {
-        let _ = tokio::fs::write(workspace.join(".env"), env_lines.join("\n")).await;
-    }
+    // Check binary cache first
+    let cached_binary = {
+        let cache = state.binary_cache.lock().await;
+        cache.get(&source_hash).cloned()
+    };
 
     let start = std::time::Instant::now();
     let mut compile_ms = 0u64;
 
-    // --- Build phase (only if source changed) ---
-    if needs_build {
+    let binary_path = if let Some(cached) = cached_binary {
+        // Cache hit — no compilation needed
+        cached
+    } else {
+        // Cache miss — need to build
+        ensure_workspace(workspace).await;
+
+        if let Err(e) = tokio::fs::write(workspace.join("src/main.rs"), &code_with_tracing).await {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to write source: {e}"), 0)));
+        }
+
         let build_output = tokio::time::timeout(
             std::time::Duration::from_secs(300),
             Command::new("cargo").arg("build").current_dir(workspace)
@@ -200,13 +167,32 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
         };
         if !build_result.status.success() {
             let stderr = String::from_utf8_lossy(&build_result.stderr).to_string();
-            *last_hash = None; // Force rebuild next time
             return (StatusCode::OK, Json(err(format!("Compilation failed:\n{stderr}"), compile_ms)));
         }
-        *last_hash = Some(source_hash);
+
+        // Cache the binary
+        let built = workspace.join("target/debug/playground-run");
+        let cache_dir = workspace.join("bin-cache");
+        let _ = tokio::fs::create_dir_all(&cache_dir).await;
+        let cached = cache_dir.join(format!("ex-{source_hash}"));
+        if tokio::fs::copy(&built, &cached).await.is_ok() {
+            state.binary_cache.lock().await.insert(source_hash, cached.clone());
+            cached
+        } else {
+            built
+        }
+    };
+
+    // Write .env next to binary working dir
+    let mut env_lines = Vec::new();
+    for key in ["GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
+        if let Ok(val) = std::env::var(key) { env_lines.push(format!("{key}={val}")); }
+    }
+    if !env_lines.is_empty() {
+        let _ = tokio::fs::write(workspace.join(".env"), env_lines.join("\n")).await;
     }
 
-    // --- Run phase: execute binary directly (no cargo overhead) ---
+    // --- Run phase: execute cached binary directly ---
     let run_start = std::time::Instant::now();
     let mut run_cmd = Command::new(&binary_path);
     run_cmd
@@ -592,11 +578,98 @@ async fn server_info() -> Json<serde_json::Value> {
     }))
 }
 
+const CARGO_TOML_CONTENT: &str = r#"[package]
+name = "playground-run"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+adk-rust = { version = "0.4.0", default-features = false, features = ["full"] }
+adk-tool = "0.4.0"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "0.8"
+async-trait = "0.1"
+anyhow = "1"
+dotenvy = "0.15"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+"#;
+
+fn hash_source(code: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    code.hash(&mut hasher);
+    hasher.finish()
+}
+
+async fn ensure_workspace(workspace: &PathBuf) {
+    let _ = tokio::fs::create_dir_all(workspace.join("src")).await;
+    let _ = tokio::fs::create_dir_all(workspace.join("bin-cache")).await;
+    if !workspace.join("Cargo.toml").exists() {
+        let _ = tokio::fs::write(workspace.join("Cargo.toml"), CARGO_TOML_CONTENT).await;
+    }
+}
+
+/// Pre-build all registered examples at startup so every user gets instant runs.
+async fn prebuild_examples(state: &AppState, examples: &[examples::Example]) {
+    let workspace = &state.workspace_dir;
+    ensure_workspace(workspace).await;
+
+    let cache_dir = workspace.join("bin-cache");
+
+    for ex in examples {
+        let code_with_tracing = inject_tracing_init(&ex.code);
+        let h = hash_source(&code_with_tracing);
+        let cached_bin = cache_dir.join(format!("ex-{h}"));
+
+        // Skip if already cached on disk (survives server restarts)
+        if cached_bin.exists() {
+            state.binary_cache.lock().await.insert(h, cached_bin.clone());
+            println!("   ♻️  {} (cached)", ex.id);
+            continue;
+        }
+
+        // Write source and build
+        if let Err(e) = tokio::fs::write(workspace.join("src/main.rs"), &code_with_tracing).await {
+            eprintln!("   ❌ {} write failed: {e}", ex.id);
+            continue;
+        }
+
+        let output = tokio::process::Command::new("cargo")
+            .arg("build")
+            .current_dir(workspace)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await;
+
+        match output {
+            Ok(o) if o.status.success() => {
+                let binary = workspace.join("target/debug/playground-run");
+                if let Err(e) = tokio::fs::copy(&binary, &cached_bin).await {
+                    eprintln!("   ❌ {} copy failed: {e}", ex.id);
+                    continue;
+                }
+                state.binary_cache.lock().await.insert(h, cached_bin);
+                println!("   ✅ {}", ex.id);
+            }
+            Ok(o) => {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                eprintln!("   ❌ {} build failed: {}", ex.id, &stderr[..stderr.len().min(200)]);
+            }
+            Err(e) => {
+                eprintln!("   ❌ {} cargo error: {e}", ex.id);
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
     workspace_dir: PathBuf,
     build_lock: Arc<Mutex<()>>,
-    last_source_hash: Arc<Mutex<Option<u64>>>,
+    /// Maps source hash → cached binary path
+    binary_cache: Arc<Mutex<HashMap<u64, PathBuf>>>,
 }
 
 #[tokio::main]
@@ -604,12 +677,22 @@ async fn main() {
     dotenvy::dotenv().ok();
 
     let mode = if is_public_mode() { "public" } else { "local" };
+    let workspace = PathBuf::from("/var/tmp/adk-playground-workspace");
 
     let state = AppState {
-        workspace_dir: PathBuf::from("/var/tmp/adk-playground-workspace"),
+        workspace_dir: workspace.clone(),
         build_lock: Arc::new(Mutex::new(())),
-        last_source_hash: Arc::new(Mutex::new(None)),
+        binary_cache: Arc::new(Mutex::new(HashMap::new())),
     };
+
+    // Pre-build all registered examples at startup
+    let examples = examples::load_examples();
+    if !examples.is_empty() {
+        println!("🔨 Pre-building {} examples...", examples.len());
+        prebuild_examples(&state, &examples).await;
+        let cache = state.binary_cache.lock().await;
+        println!("✅ {} examples pre-built and cached", cache.len());
+    }
 
     let cors = CorsLayer::new()
         .allow_origin(Any)

@@ -192,7 +192,21 @@ Resources:
             dotenvy = "0.15"
             tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
             EOF
-            echo 'fn main() { println!("warm"); }' > /var/tmp/adk-playground-workspace/src/main.rs
+            cat > /var/tmp/adk-playground-workspace/src/main.rs <<'WARMEOF'
+            use adk_rust::prelude::*;
+            use adk_tool::tool;
+
+            #[tool(description = "warm")]
+            async fn warm_tool(input: String) -> adk_tool::Result<serde_json::Value> {
+                Ok(serde_json::json!({"result": input}))
+            }
+
+            #[tokio::main]
+            async fn main() -> anyhow::Result<()> {
+                println!("warm");
+                Ok(())
+            }
+            WARMEOF
             cd /var/tmp/adk-playground-workspace
             cargo build 2>&1 || true
             echo "=== Setup Complete $(date) ==="

@@ -12,21 +12,21 @@ async fn main() -> anyhow::Result<()> {
     let researcher = Arc::new(
         LlmAgentBuilder::new("researcher")
             .instruction("Research the given topic. Identify 3 key points with evidence.")
-            .model(Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?))
+            .model(Arc::new(GeminiModel::new(&api_key, "gemini-3.1-flash-lite-preview")?))
             .build()?
     ) as Arc<dyn Agent>;
 
     let writer = Arc::new(
         LlmAgentBuilder::new("writer")
             .instruction("Take the research and write a polished 2-paragraph summary.")
-            .model(Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?))
+            .model(Arc::new(GeminiModel::new(&api_key, "gemini-3.1-flash-lite-preview")?))
             .build()?
     ) as Arc<dyn Agent>;
 
     let editor = Arc::new(
         LlmAgentBuilder::new("editor")
             .instruction("Edit for clarity and conciseness. Fix any issues. Output final version.")
-            .model(Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?))
+            .model(Arc::new(GeminiModel::new(&api_key, "gemini-3.1-flash-lite-preview")?))
             .build()?
     ) as Arc<dyn Agent>;
 

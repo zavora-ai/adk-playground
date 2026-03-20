@@ -73,7 +73,7 @@ async fn add_to_cart(args: CartItem) -> adk_tool::Result<serde_json::Value> {
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let api_key = std::env::var("GOOGLE_API_KEY")?;
-    let model = Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?);
+    let model = Arc::new(GeminiModel::new(&api_key, "gemini-3.1-flash-lite-preview")?);
 
     let agent = Arc::new(
         LlmAgentBuilder::new("shop_assistant")

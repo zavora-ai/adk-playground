@@ -5,24 +5,16 @@
       "Sid": "FindPlaygroundInstance",
       "Effect": "Allow",
       "Action": "ec2:DescribeInstances",
-      "Resource": "*",
-      "Condition": {
-        "StringEquals": {
-          "aws:RequestedRegion": "us-east-1"
-        }
-      }
+      "Resource": "*"
     },
     {
-      "Sid": "SendSSMCommand",
+      "Sid": "SSMDeploy",
       "Effect": "Allow",
       "Action": [
         "ssm:SendCommand",
         "ssm:GetCommandInvocation"
       ],
-      "Resource": [
-        "arn:aws:ssm:us-east-1::document/AWS-RunShellScript",
-        "arn:aws:ec2:us-east-1:971994957690:instance/*"
-      ]
+      "Resource": "*"
     }
   ]
 }

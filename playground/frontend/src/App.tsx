@@ -715,12 +715,17 @@ function StreamingAudioPlayer({ chunks, sampleRate, isStreaming }: {
 function useTypewriter(text: string, active: boolean, charsPerTick = 12, intervalMs = 16): string {
   const [displayed, setDisplayed] = useState('');
   const indexRef = useRef(0);
+  const prevTextRef = useRef('');
 
   useEffect(() => {
-    if (!active) { setDisplayed(text); indexRef.current = text.length; return; }
-    // Reset when text identity changes (new thinking block)
-    indexRef.current = 0;
-    setDisplayed('');
+    if (!active) { setDisplayed(text); indexRef.current = text.length; prevTextRef.current = text; return; }
+    // Only reset if the new text is NOT a continuation of the previous text
+    // (i.e. it's a completely different thinking block, not a streaming append)
+    if (!text.startsWith(prevTextRef.current)) {
+      indexRef.current = 0;
+      setDisplayed('');
+    }
+    prevTextRef.current = text;
   }, [text, active]);
 
   useEffect(() => {

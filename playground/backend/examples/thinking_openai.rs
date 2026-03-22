@@ -2,21 +2,27 @@ use adk_rust::prelude::*;
 use adk_rust::session::{SessionService, CreateRequest};
 use adk_rust::futures::StreamExt;
 use adk_core::{UserId, SessionId};
-use adk_rust::model::openai::ReasoningEffort;
+use adk_rust::model::openai::{
+    OpenAIResponsesClient, OpenAIResponsesConfig,
+    ReasoningEffort, ReasoningSummary,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-// ── OpenAI Reasoning Effort: Low vs Medium vs High ──
-// Reasoning models like o4-mini apply internal chain-of-thought before answering.
-// `ReasoningEffort` controls how much thinking the model does:
-//   - Low:    Fast, cheap — good for simple lookups
-//   - Medium: Balanced — default for most tasks
-//   - High:   Deep multi-step reasoning — best for hard problems
+// ── OpenAI Responses API — Reasoning with Summaries ──
+// The Responses API (`/v1/responses`) is OpenAI's latest endpoint,
+// replacing Chat Completions for new development.
+//
+// `OpenAIResponsesClient` provides:
+//   - True streaming (text + reasoning deltas)
+//   - Native reasoning summaries via `ReasoningSummary`
+//   - Tool calling with function tools
+//   - Server-side conversation state via `previous_response_id`
 //
 // This example sends the SAME hard logic puzzle at each effort level
-// so you can compare answer quality and latency.
+// so you can compare answer quality, reasoning depth, and latency.
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct VerifyArgs {
@@ -59,7 +65,9 @@ async fn main() -> anyhow::Result<()> {
         Determine who has which pet and which color. \
         Use the verify_logic tool to record each deduction, then give the final answer.";
 
-    println!("🧠 OpenAI Reasoning Effort Comparison\n");
+    println!("🧠 OpenAI Responses API — Reasoning Effort Comparison\n");
+    println!("Using OpenAIResponsesClient (POST /v1/responses)");
+    println!("Model: o4-mini with ReasoningSummary::Detailed\n");
     println!("Puzzle: Logic deduction with 4 clues\n");
     println!("{}\n", "─".repeat(60));
 
@@ -72,10 +80,10 @@ async fn main() -> anyhow::Result<()> {
         };
         println!("── Effort: {} ──\n", label);
 
-        let model = Arc::new(OpenAIClient::new(
-            OpenAIConfig::new(&api_key, "o4-mini")
-                .with_reasoning_effort(effort)
-        )?);
+        let config = OpenAIResponsesConfig::new(&api_key, "o4-mini")
+            .with_reasoning_effort(effort)
+            .with_reasoning_summary(ReasoningSummary::Detailed);
+        let model = Arc::new(OpenAIResponsesClient::new(config)?);
 
         let agent = Arc::new(
             LlmAgentBuilder::new("logic_solver")

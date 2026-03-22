@@ -185,7 +185,7 @@ const REGISTRY: &[ExampleMeta] = &[
         id: "openai_quickstart",
         name: "OpenAI",
         category: "Providers",
-        description: "o4-mini reasoning model with configurable effort + tool use",
+        description: "Responses API — o4-mini reasoning with configurable effort + tool use",
         file: "openai_quickstart.rs",
     },
     ExampleMeta {
@@ -295,7 +295,7 @@ const REGISTRY: &[ExampleMeta] = &[
         id: "thinking_openai",
         name: "Reasoning Effort (OpenAI)",
         category: "Thinking",
-        description: "Same logic puzzle at Low/Medium/High reasoning effort — compare quality vs speed",
+        description: "Responses API with o4-mini — Low/Medium/High reasoning effort + detailed summaries",
         file: "thinking_openai.rs",
     },
     ExampleMeta {

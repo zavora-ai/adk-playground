@@ -2,17 +2,19 @@ use adk_rust::prelude::*;
 use adk_rust::session::{SessionService, CreateRequest};
 use adk_rust::futures::StreamExt;
 use adk_core::{UserId, SessionId};
-use adk_rust::model::openai::ReasoningEffort;
+use adk_rust::model::openai::{
+    OpenAIResponsesClient, OpenAIResponsesConfig, ReasoningEffort,
+};
 use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-// ── OpenAI o4-mini with Reasoning Effort ──
-// Showcases OpenAI's reasoning models: o4-mini applies chain-of-thought
-// reasoning internally. `ReasoningEffort::Low` keeps it fast and cheap,
-// while `High` unlocks deeper multi-step reasoning.
+// ── OpenAI Responses API — o4-mini with Tool Use ──
+// Uses `OpenAIResponsesClient` (POST /v1/responses), OpenAI's latest endpoint.
+// o4-mini applies chain-of-thought reasoning internally.
+// `ReasoningEffort::Low` keeps it fast and cheap.
 
 #[derive(Deserialize, JsonSchema)]
 struct FactCheckArgs {
@@ -23,7 +25,6 @@ struct FactCheckArgs {
 /// Fact-check a claim and return a verdict with reasoning.
 #[tool]
 async fn fact_check(args: FactCheckArgs) -> adk_tool::Result<serde_json::Value> {
-    // Simulated knowledge base lookup
     let verdict = if args.claim.to_lowercase().contains("rust") {
         serde_json::json!({
             "claim": args.claim,
@@ -48,11 +49,10 @@ async fn main() -> anyhow::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY")
         .expect("Set OPENAI_API_KEY in your .env file");
 
-    // o4-mini: OpenAI's fast reasoning model with configurable effort
-    let model = Arc::new(OpenAIClient::new(
-        OpenAIConfig::new(api_key, "o4-mini")
-            .with_reasoning_effort(ReasoningEffort::Low)
-    )?);
+    // o4-mini via Responses API — fast reasoning with configurable effort
+    let config = OpenAIResponsesConfig::new(api_key, "o4-mini")
+        .with_reasoning_effort(ReasoningEffort::Low);
+    let model = Arc::new(OpenAIResponsesClient::new(config)?);
 
     let agent = Arc::new(
         LlmAgentBuilder::new("fact_checker")
@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
         cancellation_token: None,
     })?;
 
-    println!("🧠 OpenAI o4-mini — Reasoning with tool use\n");
+    println!("🧠 OpenAI o4-mini — Responses API with tool use\n");
 
     let message = Content::new("user")
         .with_text("Please fact-check: Rust is a systems programming language created by Mozilla.");

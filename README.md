@@ -43,9 +43,9 @@ The fastest way to explore ADK-Rust is the online playground — no setup requir
 | | |
 |---|---|
 | ![Editor](docs/screenshots/playground-editor.png) | ![Output](docs/screenshots/playground-output.png) |
-| Dark theme editor with 46 examples | Streaming output with model, tokens, and cost |
-| ![Trace](docs/screenshots/playground-trace.png) | ![Light](docs/screenshots/playground-light.png) |
-| Execution traces with LLM usage breakdown | Light theme support |
+| Code editor with 46 examples in the sidebar | Streaming output with model, tokens, and cost |
+| ![Trace](docs/screenshots/playground-trace.png) | ![Dark](docs/screenshots/playground-light.png) |
+| Execution traces with LLM usage breakdown | Dark theme support |
 
 Features:
 - Live code editor with syntax highlighting

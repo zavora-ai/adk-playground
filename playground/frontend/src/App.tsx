@@ -772,24 +772,31 @@ function OutputContent({ stdout, isStreaming }: { stdout: string; isError?: bool
     return { sampleRate, isActive, chunks, hasStream: !!streamStartMatch };
   }, [stdout]);
 
-  // Extract thinking blocks and text parts for styled rendering
+  // Extract thinking blocks, user prompts, and text parts for styled rendering
   const contentParts = useMemo(() => {
-    const thinkingRe = /<!--THINKING_START-->\n?([\s\S]*?)<!--THINKING_END-->\n?/g;
+    const markerRe = /<!--(?:THINKING_START|USER_PROMPT_START)-->\n?([\s\S]*?)<!--(?:THINKING_END|USER_PROMPT_END)-->\n?/g;
+    const thinkingStartRe = /<!--THINKING_START-->/;
+    const promptStartRe = /<!--USER_PROMPT_START-->/;
     // Strip audio markers first
     const cleaned = stdout
       .replace(/<!--AUDIO_STREAM_START:\d+-->\n?/g, '')
       .replace(/<!--AUDIO_CHUNK:[\S]+?-->\n?/g, '')
       .replace(/<!--AUDIO_STREAM_END-->\n?/g, '');
 
-    const parts: Array<{ type: 'text' | 'thinking'; content: string }> = [];
+    const parts: Array<{ type: 'text' | 'thinking' | 'prompt'; content: string }> = [];
     let lastIdx = 0;
     let m: RegExpExecArray | null;
-    while ((m = thinkingRe.exec(cleaned)) !== null) {
+    while ((m = markerRe.exec(cleaned)) !== null) {
       if (m.index > lastIdx) {
         parts.push({ type: 'text', content: cleaned.slice(lastIdx, m.index) });
       }
-      parts.push({ type: 'thinking', content: m[1].trim() });
-      lastIdx = thinkingRe.lastIndex;
+      const fullMatch = m[0];
+      if (thinkingStartRe.test(fullMatch)) {
+        parts.push({ type: 'thinking', content: m[1].trim() });
+      } else if (promptStartRe.test(fullMatch)) {
+        parts.push({ type: 'prompt', content: m[1].trim() });
+      }
+      lastIdx = markerRe.lastIndex;
     }
     if (lastIdx < cleaned.length) {
       parts.push({ type: 'text', content: cleaned.slice(lastIdx) });
@@ -820,6 +827,14 @@ function OutputContent({ stdout, isStreaming }: { stdout: string; isError?: bool
       {contentParts.map((cp, ci) => {
         if (cp.type === 'thinking') {
           return <ThinkingBlock key={`t-${ci}`} content={cp.content} animate={!!isStreaming} />;
+        }
+        if (cp.type === 'prompt') {
+          return (
+            <div key={`p-${ci}`} className="user-prompt-block">
+              <div className="user-prompt-label">💬 User Prompt</div>
+              <div className="user-prompt-content">{cp.content}</div>
+            </div>
+          );
         }
         // For text parts, handle audio URLs within them
         const textContent = cp.content;

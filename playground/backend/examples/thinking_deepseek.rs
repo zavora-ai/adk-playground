@@ -67,16 +67,15 @@ async fn main() -> anyhow::Result<()> {
     println!("## 🧮 DeepSeek Chain-of-Thought — Watch the Model Think\n");
 
     // A tricky problem with a common wrong answer (many people say 10 cents)
-    let message = Content::new("user")
-        .with_text(
-            "Solve this step by step:\n\n\
+    let prompt = "Solve this step by step:\n\n\
              A store sells notebooks and pens. A notebook costs $3 more than a pen. \
              If you buy 4 notebooks and 3 pens, the total is $39. \
              How much does each item cost?\n\n\
              Then verify: A train leaves City A at 9:00 AM traveling at 60 mph toward City B. \
              Another train leaves City B at 10:00 AM traveling at 90 mph toward City A. \
-             The cities are 330 miles apart. At what time do the trains meet?"
-        );
+             The cities are 330 miles apart. At what time do the trains meet?";
+    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", prompt);
+    let message = Content::new("user").with_text(prompt);
     let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
 
     let mut thinking_tokens = 0;

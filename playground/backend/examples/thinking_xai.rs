@@ -124,13 +124,12 @@ async fn main() -> anyhow::Result<()> {
     println!("## 🧠 xAI Grok-3-mini — OpenAI-Compatible Reasoning\n");
     println!("Grok reasons internally before responding (reasoning\\_content → Part::Thinking).\n");
 
-    let message = Content::new("user")
-        .with_text(
-            "How many piano tuners are there in Chicago? \
+    let prompt = "How many piano tuners are there in Chicago? \
              This is a classic Fermi estimation problem. Break it down step by step, \
              record each sub-estimate with the tool, then cross-check your estimates \
-             for consistency before giving a final answer."
-        );
+             for consistency before giving a final answer.";
+    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", prompt);
+    let message = Content::new("user").with_text(prompt);
     let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
 
     let mut thinking_blocks = 0;

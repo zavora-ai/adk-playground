@@ -1083,6 +1083,30 @@ body {
   word-break: break-word;
 }
 
+/* User prompt blocks in output */
+.user-prompt-block {
+  margin: 8px 0;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+}
+.user-prompt-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.user-prompt-content {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Streaming audio player */
 .audio-stream-block {
   margin: 12px 0;

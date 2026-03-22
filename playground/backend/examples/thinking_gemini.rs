@@ -133,11 +133,10 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Turn 1: Multi-step problem triggers thinking + tool calls ──
     println!("### Turn 1: Multi-step calculation\n");
-    let message = Content::new("user")
-        .with_text(
-            "A train travels 120 km in 2 hours and 15 minutes. \
-             What is its average speed in both km/h and mph?"
-        );
+    let prompt1 = "A train travels 120 km in 2 hours and 15 minutes. \
+             What is its average speed in both km/h and mph?";
+    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", prompt1);
+    let message = Content::new("user").with_text(prompt1);
     let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
 
     let mut thinking_count = 0;
@@ -186,8 +185,9 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Turn 2: Follow-up relies on preserved history + thought signatures ──
     println!("### Turn 2: Follow-up (history includes thought signatures)\n");
-    let message = Content::new("user")
-        .with_text("Now convert that speed to a pace (minutes per mile) for a runner comparison.");
+    let prompt2 = "Now convert that speed to a pace (minutes per mile) for a runner comparison.";
+    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", prompt2);
+    let message = Content::new("user").with_text(prompt2);
     let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
 
     while let Some(event) = stream.next().await {

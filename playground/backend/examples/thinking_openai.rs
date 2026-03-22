@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
     println!("🧠 OpenAI Responses API — Reasoning Effort Comparison\n");
     println!("Using OpenAIResponsesClient (POST /v1/responses)");
     println!("Model: o4-mini with ReasoningSummary::Detailed\n");
-    println!("Puzzle: Logic deduction with 4 clues\n");
+    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", puzzle);
     println!("{}\n", "─".repeat(60));
 
     for effort in [ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High] {

@@ -110,9 +110,7 @@ async fn main() -> anyhow::Result<()> {
     println!("## 🔍 Anthropic Extended Thinking — Systems Design Analysis\n");
     println!("Claude will think internally (10K token budget) before responding.\n");
 
-    let message = Content::new("user")
-        .with_text(
-            "We need to choose a data storage strategy for a social media platform \
+    let prompt = "We need to choose a data storage strategy for a social media platform \
              that handles 50M daily active users. The key requirements are:\n\
              - Sub-10ms read latency for user feeds\n\
              - Strong consistency for financial transactions (tips, subscriptions)\n\
@@ -120,8 +118,9 @@ async fn main() -> anyhow::Result<()> {
              - Must handle 500K writes/second at peak\n\
              - Budget: $50K/month infrastructure\n\n\
              Evaluate at least 3 different approaches (e.g., single DB, polyglot persistence, \
-             CQRS+event sourcing) using the tradeoff tool, then recommend the best option."
-        );
+             CQRS+event sourcing) using the tradeoff tool, then recommend the best option.";
+    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", prompt);
+    let message = Content::new("user").with_text(prompt);
     let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
 
     let mut saw_thinking = false;

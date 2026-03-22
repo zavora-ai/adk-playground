@@ -172,6 +172,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "adk-code"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5865e43d271e8d93873090e0c5b573fc750f29322205714e2821bd84be04d63e"
+dependencies = [
+ "adk-core 0.4.0",
+ "adk-sandbox",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "adk-core"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -510,6 +527,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "adk-sandbox"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "275279383cc32241bacde91aa092703f42c694b8e5564583a63dba440ed85932"
+dependencies = [
+ "adk-core 0.4.0",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2459,6 +2492,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cli_launcher_test"
+version = "0.1.0"
+dependencies = [
+ "adk-agent",
+ "adk-artifact",
+ "adk-cli",
+ "adk-core 0.4.0",
+ "adk-model",
+ "adk-session",
+ "tokio",
+]
+
+[[package]]
 name = "cli_test"
 version = "0.1.0"
 dependencies = [
@@ -2486,6 +2532,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75443c44cd6b379beb8c5b45d85d0773baf31cce901fe7bb252f4eff3008ef7d"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "code_test"
+version = "0.1.0"
+dependencies = [
+ "adk-code",
+ "adk-core 0.4.0",
+ "adk-sandbox",
+ "async-trait",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -7188,6 +7246,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
+name = "plugins_test"
+version = "0.1.0"
+dependencies = [
+ "adk-agent",
+ "adk-core 0.4.0",
+ "adk-plugin",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "png"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7687,6 +7756,17 @@ dependencies = [
  "adk-core 0.4.0",
  "adk-rag",
  "async-trait",
+ "tokio",
+]
+
+[[package]]
+name = "rag_usecases_test"
+version = "0.1.0"
+dependencies = [
+ "adk-core 0.4.0",
+ "adk-rag",
+ "async-trait",
+ "serde_json",
  "tokio",
 ]
 
@@ -9420,6 +9500,17 @@ name = "siphasher"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2aa850e253778c88a04c3d7323b043aeda9d3e30d5971937c1855769763678e"
+
+[[package]]
+name = "skills_test"
+version = "0.1.0"
+dependencies = [
+ "adk-core 0.4.0",
+ "adk-skill",
+ "async-trait",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "slab"

@@ -1,0 +1,25 @@
+[package]
+name = "code_test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "code_test_types"
+path = "src/types.rs"
+
+[[bin]]
+name = "code_test_sandbox"
+path = "src/sandbox.rs"
+
+[[bin]]
+name = "code_test_tool"
+path = "src/tool.rs"
+
+[dependencies]
+adk-code = { workspace = true }
+adk-core = { workspace = true }
+adk-sandbox = { workspace = true }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"

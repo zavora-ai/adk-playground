@@ -1,6 +1,7 @@
 use adk_rust::prelude::*;
 use adk_rust::session::{SessionService, CreateRequest, GetRequest};
 use adk_rust::futures::StreamExt;
+use adk_core::{UserId, SessionId};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -50,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     // Turn 1
     println!("--- Turn 1 ---");
     let msg1 = Content::new("user").with_text("My name is Alice and I love Rust.");
-    let mut stream = runner.run("alice".into(), "session-1".into(), msg1).await?;
+    let mut stream = runner.run(UserId::new("alice")?, SessionId::new("session-1")?, msg1).await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
@@ -64,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
     // Turn 2 — agent should remember the name from Turn 1
     println!("--- Turn 2 ---");
     let msg2 = Content::new("user").with_text("What's my name and what language do I like?");
-    let mut stream = runner.run("alice".into(), "session-1".into(), msg2).await?;
+    let mut stream = runner.run(UserId::new("alice")?, SessionId::new("session-1")?, msg2).await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {

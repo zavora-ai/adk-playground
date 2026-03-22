@@ -2,6 +2,7 @@ use adk_rust::prelude::*;
 use adk_tool::tool;
 use adk_rust::session::{SessionService, CreateRequest};
 use adk_rust::futures::StreamExt;
+use adk_core::{UserId, SessionId};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -118,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
     println!("👤 User: I'm looking for a new laptop and some earbuds. What do you have?\n");
     let msg1 = Content::new("user")
         .with_text("I'm looking for a new laptop and some earbuds. What do you have?");
-    let mut stream = runner.run("user".into(), "s1".into(), msg1).await?;
+    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg1).await?;
     print!("🤖 Assistant: ");
     while let Some(event) = stream.next().await {
         let event = event?;
@@ -134,7 +135,7 @@ async fn main() -> anyhow::Result<()> {
     println!("👤 User: Nice! Add the laptop and 2 AirPods to my cart. Also, is the iPad available?\n");
     let msg2 = Content::new("user")
         .with_text("Nice! Add the laptop and 2 AirPods to my cart. Also, is the iPad available?");
-    let mut stream = runner.run("user".into(), "s1".into(), msg2).await?;
+    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg2).await?;
     print!("🤖 Assistant: ");
     while let Some(event) = stream.next().await {
         let event = event?;
@@ -150,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
     println!("👤 User: What's my cart total so far?\n");
     let msg3 = Content::new("user")
         .with_text("What's my cart total so far?");
-    let mut stream = runner.run("user".into(), "s1".into(), msg3).await?;
+    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg3).await?;
     print!("🤖 Assistant: ");
     while let Some(event) = stream.next().await {
         let event = event?;

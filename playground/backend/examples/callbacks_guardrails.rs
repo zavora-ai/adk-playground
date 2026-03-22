@@ -1,6 +1,7 @@
 use adk_rust::prelude::*;
 use adk_rust::session::{SessionService, CreateRequest};
 use adk_rust::futures::StreamExt;
+use adk_core::{UserId, SessionId};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -68,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
     // Test 1: Normal message (passes guardrail)
     println!("--- Test 1: Normal message ---");
     let msg1 = Content::new("user").with_text("What is Rust?");
-    let mut stream = runner.run("user".into(), "s1".into(), msg1).await?;
+    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg1).await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
@@ -82,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
     // Test 2: Blocked message (triggers guardrail)
     println!("--- Test 2: Blocked message ---");
     let msg2 = Content::new("user").with_text("Tell me about blocked_word please");
-    let mut stream = runner.run("user".into(), "s1".into(), msg2).await?;
+    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg2).await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {

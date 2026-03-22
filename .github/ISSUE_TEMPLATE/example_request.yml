@@ -1,0 +1,88 @@
+name: "📝 Example Request"
+description: Request a new playground example for ADK-Rust
+title: "[Example Request]: "
+labels: ["example-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new example! This helps us prioritize what to build next for the ADK-Rust Playground.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: Which area does this example fall under?
+      options:
+        - Agents (LLM Agent, Graph Agent, Multi-Agent)
+        - Workflows (Sequential, Parallel, Conditional)
+        - Tools (Function Tools, MCP, Code Execution)
+        - Models (OpenAI, Anthropic, Gemini, DeepSeek, Groq, xAI, etc.)
+        - Thinking / Reasoning (Chain-of-thought, Extended thinking)
+        - Streaming (SSE, Real-time, Audio)
+        - Memory & Sessions
+        - Artifacts (Files, Images, PDFs)
+        - Deployment (A2A, REST API)
+        - Callbacks & Guardrails
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What example would you like to see?
+      description: Describe the example you'd like added to the playground.
+      placeholder: |
+        e.g. "An example showing how to use Claude's extended thinking with tool calls,
+        where the agent reasons through a multi-step math problem and uses a calculator tool
+        to verify its work."
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: Why is this example useful? What would it help developers learn?
+      placeholder: |
+        e.g. "Many developers want to see how thinking/reasoning works alongside tool use.
+        Current thinking examples don't combine both features."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Model provider (if applicable)
+      description: Does this example require a specific provider?
+      options:
+        - Any / Not specific
+        - OpenAI (GPT-4o, o3, o4-mini)
+        - Anthropic (Claude Sonnet, Haiku)
+        - Google (Gemini Flash, Pro)
+        - DeepSeek (Chat, Reasoner)
+        - xAI (Grok)
+        - Groq (Llama, Mixtral)
+        - Mistral
+        - Ollama (Local)
+        - Multiple providers
+    validations:
+      required: false
+
+  - type: textarea
+    id: code-sketch
+    attributes:
+      label: Code sketch (optional)
+      description: If you have a rough idea of what the code should look like, paste it here.
+      render: rust
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: willing-to-contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd be willing to submit a PR for this example
+          required: false

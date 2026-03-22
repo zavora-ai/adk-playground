@@ -3,10 +3,12 @@ use adk_tool::tool;
 use adk_rust::tool::AgentTool;
 use adk_rust::session::{SessionService, CreateRequest};
 use adk_rust::futures::StreamExt;
+use adk_core::{UserId, SessionId};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Deserialize, JsonSchema)]
 struct CalcArgs {
@@ -53,21 +55,26 @@ async fn main() -> anyhow::Result<()> {
         .model(model.clone())
         .build()?;
 
-    // Wrap specialists as tools for the coordinator
-    let math_tool = AgentTool::new(Arc::new(math_agent));
-    let trivia_tool = AgentTool::new(Arc::new(trivia_agent));
+    // Wrap specialists as tools with timeouts to prevent runaway execution
+    let math_tool = AgentTool::new(Arc::new(math_agent))
+        .timeout(Duration::from_secs(30));
+    let trivia_tool = AgentTool::new(Arc::new(trivia_agent))
+        .timeout(Duration::from_secs(30));
 
+    // Coordinator with limited iterations to prevent endless tool-calling loops
     let coordinator = Arc::new(
         LlmAgentBuilder::new("coordinator")
             .instruction(
                 "Route questions to the right specialist:\n\
                  - Math/calculations → math_expert\n\
                  - Trivia/facts → trivia_expert\n\
-                 Summarize the specialist's response for the user."
+                 Call each specialist ONCE, then summarize their responses for the user.\n\
+                 Do NOT call the same specialist more than once."
             )
             .model(model)
             .tool(Arc::new(math_tool))
             .tool(Arc::new(trivia_tool))
+            .max_iterations(10)
             .build()?
     );
 
@@ -96,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
 
     let message = Content::new("user")
         .with_text("What is 15% of 250, and who invented the percentage symbol?");
-    let mut stream = runner.run("user".into(), "s1".into(), message).await?;
+    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;

@@ -41,6 +41,11 @@ members = [
     "docs_examples/realtime/realtime_readme_test",
     "docs_examples/readme_validation",
     "docs_examples/models/providers_test",
+    "docs_examples/extensions/skills_test",
+    "docs_examples/extensions/plugins_test",
+    "docs_examples/coding/code_test",
+    "docs_examples/coding/cli_launcher_test",
+    "docs_examples/tools/rag_usecases_test",
 ]
 
 [workspace.package]

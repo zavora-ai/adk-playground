@@ -2,6 +2,7 @@ use adk_rust::prelude::*;
 use adk_tool::tool;
 use adk_rust::session::{SessionService, CreateRequest};
 use adk_rust::futures::StreamExt;
+use adk_core::{UserId, SessionId};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -114,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
 
     let message = Content::new("user")
         .with_text("What's the weather in Tokyo? Convert 22°C to Fahrenheit. Also what's 15% of 250?");
-    let mut stream = runner.run("user".into(), "s1".into(), message).await?;
+    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;

@@ -4,9 +4,10 @@ use axum::{
     Router,
     extract::Json,
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, sse::{Event, Sse}},
     routing::{get, post},
 };
+use tokio::io::{AsyncBufReadExt, BufReader};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
@@ -74,6 +75,15 @@ struct TraceEvent {
     #[serde(skip_serializing_if = "String::is_empty")]
     target: String,
 }
+
+/// All API key env vars to forward to example processes
+const ENV_KEYS: &[&str] = &[
+    "GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+    "DEEPSEEK_API_KEY", "MISTRAL_API_KEY", "XAI_API_KEY",
+    "AZURE_AI_ENDPOINT", "AZURE_AI_API_KEY", "AZURE_AI_MODEL",
+    "AWS_REGION", "AWS_DEFAULT_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "BEDROCK_MODEL_ID",
+    "POSTGRES_URL", "MONGODB_URL", "NEO4J_URL", "NEO4J_USER", "NEO4J_PASS",
+];
 
 /// Returns true if the server is in public (restricted) mode.
 /// In public mode, only registered examples can be executed.
@@ -185,7 +195,7 @@ async fn run_code(
 
     // Write .env next to binary working dir
     let mut env_lines = Vec::new();
-    for key in ["GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
+    for key in ENV_KEYS {
         if let Ok(val) = std::env::var(key) { env_lines.push(format!("{key}={val}")); }
     }
     if !env_lines.is_empty() {
@@ -200,11 +210,11 @@ async fn run_code(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("RUST_LOG", "info,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn");
-    for key in ["GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
+    for key in ENV_KEYS {
         if let Ok(val) = std::env::var(key) { run_cmd.env(key, val); }
     }
 
-    let run_output = tokio::time::timeout(std::time::Duration::from_secs(30), run_cmd.output()).await;
+    let run_output = tokio::time::timeout(std::time::Duration::from_secs(300), run_cmd.output()).await;
     let run_ms = run_start.elapsed().as_millis() as u64;
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -226,39 +236,268 @@ async fn run_code(
             }))
         }
         Ok(Err(e)) => (StatusCode::OK, Json(err(format!("Run failed: {e}"), duration_ms))),
-        Err(_) => (StatusCode::OK, Json(err("Execution timed out (30s limit)".into(), duration_ms))),
+        Err(_) => (StatusCode::OK, Json(err("Execution timed out (300s limit)".into(), duration_ms))),
     }
+}
+
+/// SSE streaming version of run_code. Streams stdout/stderr lines as they arrive.
+async fn run_code_stream(
+    state: axum::extract::State<AppState>,
+    Json(req): Json<RunRequest>,
+) -> impl IntoResponse {
+    let code = match resolve_code(&req) {
+        Ok(c) => c,
+        Err(resp) => {
+            let stream = futures::stream::once(async move {
+                Ok::<_, std::convert::Infallible>(
+                    Event::default()
+                        .event("error")
+                        .data(serde_json::to_string(&resp).unwrap_or_default()),
+                )
+            });
+            return Sse::new(stream).into_response();
+        }
+    };
+
+    let workspace = state.workspace_dir.clone();
+    let binary_cache = state.binary_cache.clone();
+    let build_lock = state.build_lock.clone();
+
+    let stream = async_stream::stream! {
+        let _lock = build_lock.lock().await;
+        let code_with_tracing = inject_tracing_init(&code);
+        let source_hash = hash_source(&code_with_tracing);
+
+        // Check binary cache
+        let cached_binary = {
+            let cache = binary_cache.lock().await;
+            cache.get(&source_hash).cloned()
+        };
+
+        let start = std::time::Instant::now();
+        let mut compile_ms = 0u64;
+
+        let binary_path = if let Some(cached) = cached_binary {
+            cached
+        } else {
+            ensure_workspace(&workspace).await;
+            if let Err(e) = tokio::fs::write(workspace.join("src/main.rs"), &code_with_tracing).await {
+                yield Ok::<_, std::convert::Infallible>(Event::default().event("error").data(format!("Failed to write source: {e}")));
+                return;
+            }
+
+            yield Ok(Event::default().event("status").data("compiling"));
+
+            let build_output = tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                Command::new("cargo").arg("build").current_dir(&workspace)
+                    .stdout(Stdio::piped()).stderr(Stdio::piped()).output(),
+            ).await;
+            compile_ms = start.elapsed().as_millis() as u64;
+
+            match build_output {
+                Ok(Ok(o)) if o.status.success() => {
+                    let built = workspace.join("target/debug/playground-run");
+                    let cache_dir = workspace.join("bin-cache");
+                    let _ = tokio::fs::create_dir_all(&cache_dir).await;
+                    let cached = cache_dir.join(format!("ex-{source_hash}"));
+                    if tokio::fs::copy(&built, &cached).await.is_ok() {
+                        binary_cache.lock().await.insert(source_hash, cached.clone());
+                        cached
+                    } else {
+                        built
+                    }
+                }
+                Ok(Ok(o)) => {
+                    let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+                    yield Ok(Event::default().event("error").data(format!("Compilation failed:\n{stderr}")));
+                    return;
+                }
+                Ok(Err(e)) => {
+                    yield Ok(Event::default().event("error").data(format!("Failed to run cargo: {e}")));
+                    return;
+                }
+                Err(_) => {
+                    yield Ok(Event::default().event("error").data("Build timed out (5 min limit)."));
+                    return;
+                }
+            }
+        };
+
+        // Write .env
+        let mut env_lines = Vec::new();
+        for key in ENV_KEYS {
+            if let Ok(val) = std::env::var(key) { env_lines.push(format!("{key}={val}")); }
+        }
+        if !env_lines.is_empty() {
+            let _ = tokio::fs::write(workspace.join(".env"), env_lines.join("\n")).await;
+        }
+
+        yield Ok(Event::default().event("status").data(format!("running (compile: {compile_ms}ms)")));
+
+        // Spawn process with piped stdout/stderr
+        let mut cmd = Command::new(&binary_path);
+        cmd.current_dir(&workspace)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .env("RUST_LOG", "info,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn");
+        for key in ENV_KEYS {
+            cmd.env(key, std::env::var(key).unwrap_or_default());
+        }
+        let mut child = match cmd.spawn()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                yield Ok(Event::default().event("error").data(format!("Failed to spawn: {e}")));
+                return;
+            }
+        };
+
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+        let mut stdout_reader = BufReader::new(stdout).lines();
+        let mut stderr_reader = BufReader::new(stderr).lines();
+
+        let run_start = std::time::Instant::now();
+        let timeout = tokio::time::sleep(std::time::Duration::from_secs(300));
+        tokio::pin!(timeout);
+
+        let mut all_stderr = Vec::new();
+
+        loop {
+            tokio::select! {
+                line = stdout_reader.next_line() => {
+                    match line {
+                        Ok(Some(l)) => {
+                            yield Ok(Event::default().event("stdout").data(l));
+                        }
+                        Ok(None) => break, // stdout closed
+                        Err(_) => break,
+                    }
+                }
+                line = stderr_reader.next_line() => {
+                    match line {
+                        Ok(Some(l)) => {
+                            all_stderr.push(l.clone());
+                            // Send trace JSON lines as trace events, skip noise
+                            let t = l.trim();
+                            if t.starts_with('{') {
+                                yield Ok(Event::default().event("trace").data(l));
+                            } else if !t.is_empty()
+                                && !t.starts_with("Compiling ")
+                                && !t.starts_with("Finished ")
+                                && !t.starts_with("Running ")
+                                && !t.starts_with("warning:")
+                                && !t.contains("generated 1 warning")
+                            {
+                                yield Ok(Event::default().event("stderr").data(l));
+                            }
+                        }
+                        Ok(None) => break,
+                        Err(_) => break,
+                    }
+                }
+                _ = &mut timeout => {
+                    let _ = child.kill().await;
+                    yield Ok(Event::default().event("error").data("Execution timed out (300s limit)"));
+                    break;
+                }
+            }
+        }
+
+        // Wait for process to finish
+        let status = child.wait().await;
+        let run_ms = run_start.elapsed().as_millis() as u64;
+        let success = status.map(|s| s.success()).unwrap_or(false);
+
+        // Send summary
+        let model = extract_model_from_code(&code);
+        let summary = serde_json::json!({
+            "success": success,
+            "compile_ms": compile_ms,
+            "run_ms": run_ms,
+            "model": model,
+        });
+        yield Ok(Event::default().event("done").data(summary.to_string()));
+    };
+
+    Sse::new(stream).into_response()
 }
 
 
 /// Extract model name from user code by looking for common patterns
 fn extract_model_from_code(code: &str) -> Option<String> {
+    // Helper: extract the Nth quoted string after a position
+    fn nth_quoted_string(text: &str, n: usize) -> Option<String> {
+        let mut count = 0;
+        let mut in_string = false;
+        let mut start = 0;
+        for (i, c) in text.char_indices() {
+            if c == '"' {
+                if in_string {
+                    count += 1;
+                    if count == n {
+                        let s = &text[start..i];
+                        if !s.is_empty() && s.len() < 60 {
+                            return Some(s.to_string());
+                        }
+                    }
+                    in_string = false;
+                } else {
+                    in_string = true;
+                    start = i + 1;
+                }
+            }
+            if c == ')' && !in_string { break; }
+        }
+        None
+    }
+
+    // Pattern 1: GeminiModel::new(&key, "model-name") — second quoted string
+    if let Some(pos) = code.find("GeminiModel::new(") {
+        let after = &code[pos + "GeminiModel::new(".len()..];
+        if let Some(m) = nth_quoted_string(after, 2) {
+            if !m.starts_with('&') { return Some(m); }
+        }
+    }
+
+    // Pattern 2: Provider::new(Config::new(key, "model")) — second quoted string
+    let config_patterns = [
+        "OpenAIConfig::new(",
+        "AnthropicConfig::new(",
+        "OpenAICompatibleConfig::mistral(",
+        "OpenAICompatibleConfig::xai(",
+    ];
+    for pat in &config_patterns {
+        if let Some(pos) = code.find(pat) {
+            let after = &code[pos + pat.len()..];
+            if let Some(m) = nth_quoted_string(after, 2) {
+                return Some(m);
+            }
+            // Fallback: first quoted string if only one arg
+            if let Some(m) = nth_quoted_string(after, 1) {
+                if m.contains('-') || m.contains('/') { return Some(m); }
+            }
+        }
+    }
+
+    // Pattern 3: DeepSeekConfig::chat(key) or ::reasoner(key) — model is implicit
+    if code.contains("DeepSeekConfig::reasoner(") {
+        return Some("deepseek-reasoner".to_string());
+    }
+    if code.contains("DeepSeekConfig::chat(") {
+        return Some("deepseek-chat".to_string());
+    }
+
+    // Pattern 4: Direct string patterns like .model("gemini-...") or model: "gpt-..."
     let patterns = [".model(\"", "model: \"", "\"model\": \""];
     for pat in &patterns {
         if let Some(pos) = code.find(pat) {
             let after = &code[pos + pat.len()..];
             if let Some(end) = after.find('"') {
                 let model = &after[..end];
-                if !model.is_empty() && model.len() < 60 {
+                if !model.is_empty() && model.len() < 60 && (model.contains('-') || model.contains('/')) {
                     return Some(model.to_string());
-                }
-            }
-        }
-    }
-    // GeminiModel::new(&key, "model")
-    if let Some(pos) = code.find("GeminiModel::new(") {
-        let after = &code[pos..];
-        let mut in_quotes = false;
-        let mut count = 0;
-        for (i, c) in after.char_indices() {
-            if c == '"' {
-                if in_quotes { count += 1; if count == 2 { /* skip first string (key) */ } }
-                in_quotes = !in_quotes;
-            }
-            if count >= 2 && c == '"' {
-                let rest = &after[i + 1..];
-                if let Some(end) = rest.find('"') {
-                    return Some(rest[..end].to_string());
                 }
             }
         }
@@ -311,10 +550,24 @@ fn estimate_cost(model: Option<&str>, input_tokens: Option<u64>, output_tokens: 
         m if m.contains("flash-lite") => (0.25, 1.50),
         m if m.contains("flash") => (0.15, 0.60),
         m if m.contains("pro") => (1.25, 5.00),
+        m if m.contains("gpt-4.1-mini") => (0.40, 1.60),
+        m if m.contains("gpt-4.1") => (2.00, 8.00),
         m if m.contains("gpt-4o-mini") => (0.15, 0.60),
         m if m.contains("gpt-4o") => (2.50, 10.00),
+        m if m.contains("gpt-5-mini") => (0.40, 1.60),
+        m if m.contains("o4-mini") => (1.10, 4.40),
+        m if m.contains("o3-mini") => (1.10, 4.40),
+        m if m.contains("claude-sonnet-4-5") => (2.00, 10.00),
+        m if m.contains("claude-sonnet-4") || m.contains("claude-3-7-sonnet") => (3.00, 15.00),
         m if m.contains("claude-3-5-haiku") => (0.80, 4.00),
-        m if m.contains("claude-3-5-sonnet") || m.contains("claude-3-7-sonnet") => (3.00, 15.00),
+        m if m.contains("claude-3-5-sonnet") => (3.00, 15.00),
+        m if m.contains("deepseek-chat") => (0.27, 1.10),
+        m if m.contains("deepseek-reasoner") => (0.55, 2.19),
+        m if m.contains("mistral-medium") => (0.40, 1.20),
+        m if m.contains("mistral-small") => (0.10, 0.30),
+        m if m.contains("mistral-large") => (2.00, 6.00),
+        m if m.contains("grok-3-mini") => (0.30, 0.50),
+        m if m.contains("grok-3") => (3.00, 15.00),
         _ => return None,
     };
     Some((inp as f64 * ip + out as f64 * op) / 1_000_000.0)
@@ -323,14 +576,24 @@ fn estimate_cost(model: Option<&str>, input_tokens: Option<u64>, output_tokens: 
 /// Inject a JSON tracing subscriber init into user code so we capture structured traces.
 fn inject_tracing_init(code: &str) -> String {
     // Insert tracing init right after `dotenvy::dotenv().ok();`
+    // Uses FmtSpan::CLOSE to emit span close events — this captures fields like
+    // gen_ai.usage.* and gcp.vertex.agent.llm_response that are recorded on spans
+    // AFTER the initial log event fires.
     let tracing_init = r#"
     // --- Playground tracing (auto-injected) ---
-    tracing_subscriber::fmt()
-        .json()
-        .with_target(true)
-        .with_env_filter(tracing_subscriber::EnvFilter::new("info,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn"))
-        .with_writer(std::io::stderr)
-        .init();
+    {
+        use tracing_subscriber::fmt::format::FmtSpan;
+        tracing_subscriber::fmt()
+            .json()
+            .with_target(true)
+            .with_span_list(true)
+            .with_span_events(FmtSpan::CLOSE)
+            .with_env_filter(tracing_subscriber::EnvFilter::new(
+                "info,adk_agent=debug,adk_model=debug,adk_tool=debug,adk_telemetry=debug,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn"
+            ))
+            .with_writer(std::io::stderr)
+            .init();
+    }
     // --- End playground tracing ---"#;
 
     if let Some(pos) = code.find("dotenvy::dotenv().ok();") {
@@ -579,11 +842,29 @@ async fn server_info() -> Json<serde_json::Value> {
 const CARGO_TOML_CONTENT: &str = r#"[package]
 name = "playground-run"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-adk-rust = { version = "0.4.0", default-features = false, features = ["full"] }
-adk-tool = "0.4.0"
+adk-rust = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-rust", default-features = false, features = ["full", "openai", "anthropic", "deepseek", "bedrock", "azure-ai", "postgres-session", "mongodb-session", "neo4j-session"] }
+adk-tool = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-tool" }
+adk-audio = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-audio", default-features = false, features = ["tts"] }
+adk-realtime = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-realtime", default-features = false, features = ["openai"] }
+adk-skill = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-skill" }
+adk-plugin = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-plugin" }
+adk-code = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-code" }
+adk-sandbox = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-sandbox" }
+adk-rag = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-rag" }
+adk-core = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-core" }
+adk-agent = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-agent", features = ["guardrails"] }
+adk-session = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-session" }
+adk-artifact = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-artifact" }
+adk-cli = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-cli" }
+adk-guardrail = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-guardrail" }
+adk-memory = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-memory" }
+adk-auth = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-auth" }
+adk-telemetry = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-telemetry" }
+chrono = { version = "0.4", features = ["serde"] }
+rustls = { version = "0.23", features = ["ring"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -591,7 +872,13 @@ schemars = "0.8"
 async-trait = "0.1"
 anyhow = "1"
 dotenvy = "0.15"
+base64 = "0.22"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+mongodb = "3"
+neo4rs = "0.8"
+tempfile = "3"
+serde_yaml = "0.9"
 "#;
 
 fn hash_source(code: &str) -> u64 {
@@ -603,9 +890,8 @@ fn hash_source(code: &str) -> u64 {
 async fn ensure_workspace(workspace: &PathBuf) {
     let _ = tokio::fs::create_dir_all(workspace.join("src")).await;
     let _ = tokio::fs::create_dir_all(workspace.join("bin-cache")).await;
-    if !workspace.join("Cargo.toml").exists() {
-        let _ = tokio::fs::write(workspace.join("Cargo.toml"), CARGO_TOML_CONTENT).await;
-    }
+    // Always write Cargo.toml to keep it in sync with the template
+    let _ = tokio::fs::write(workspace.join("Cargo.toml"), CARGO_TOML_CONTENT).await;
 }
 
 /// Pre-build all registered examples at startup so every user gets instant runs.
@@ -702,6 +988,8 @@ async fn main() {
         .route("/api/info", get(server_info))
         .route("/api/examples", get(list_examples))
         .route("/api/run", post(run_code))
+        .route("/api/run-stream", post(run_code_stream))
+        .nest_service("/api/audio", ServeDir::new(workspace.join("audio-output")))
         .fallback_service(ServeDir::new("../frontend/dist"))
         .layer(cors)
         .with_state(state);
@@ -711,7 +999,7 @@ async fn main() {
         .and_then(|p| p.parse().ok())
         .unwrap_or(9876u16);
 
-    println!("🚀 ADK Playground server running on http://localhost:{}", port);
+    println!("🚀 ADK-Rust Playground server running on http://localhost:{}", port);
     println!("   Mode: {} | Custom code: {}", mode, !is_public_mode());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))

@@ -1,0 +1,32 @@
+[package]
+name = "rag_usecases_test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "rag_usecases_test_agent_tool"
+path = "src/agent_tool.rs"
+
+[[bin]]
+name = "rag_usecases_test_multi_collection"
+path = "src/multi_collection.rs"
+
+[[bin]]
+name = "rag_usecases_test_markdown_docs"
+path = "src/markdown_docs.rs"
+
+[[bin]]
+name = "rag_usecases_test_custom_embedder"
+path = "src/custom_embedder.rs"
+
+[[bin]]
+name = "rag_usecases_test_hybrid_search"
+path = "src/hybrid_search.rs"
+
+[dependencies]
+adk-rag = { workspace = true }
+adk-core = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+async-trait = "0.1"
+serde_json = "1"

@@ -1,6 +1,7 @@
 use adk_rust::prelude::*;
 use adk_rust::session::{SessionService, CreateRequest};
 use adk_rust::futures::StreamExt;
+use adk_core::{UserId, SessionId};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -86,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
 
     let message = Content::new("user")
         .with_text("Write me a short poem about a Rust programmer who finally defeated the borrow checker");
-    let mut stream = runner.run("user".into(), "s1".into(), message).await?;
+    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;

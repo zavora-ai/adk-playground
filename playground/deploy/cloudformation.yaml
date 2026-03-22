@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: ADK Playground - Spot Instance on default VPC
+Description: ADK-Rust Playground - Spot Instance on default VPC
 
 Parameters:
   GoogleApiKey:

@@ -1,0 +1,22 @@
+[package]
+name = "cli_launcher_test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "cli_launcher_test_modes"
+path = "src/modes.rs"
+
+[[bin]]
+name = "cli_launcher_test_serve"
+path = "src/serve.rs"
+
+[dependencies]
+adk-cli = { workspace = true }
+adk-agent = { workspace = true }
+adk-model = { workspace = true, features = ["gemini"] }
+adk-artifact = { workspace = true }
+adk-session = { workspace = true }
+adk-core = { workspace = true }
+tokio = { version = "1", features = ["full"] }

@@ -1,4 +1,4 @@
-# ADK Playground — AWS Deployment
+# ADK-Rust Playground — AWS Deployment
 
 Deploys the playground on an EC2 Spot Instance (ARM Graviton) for ~$12-14/month.
 

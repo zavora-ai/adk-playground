@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: adk-postgres
+    environment:
+      POSTGRES_USER: adk
+      POSTGRES_PASSWORD: adk_playground
+      POSTGRES_DB: adk_sessions
+    ports:
+      - "5433:5432"
+    volumes:
+      - adk_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adk"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    container_name: adk-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: adk
+      MONGO_INITDB_ROOT_PASSWORD: adk_playground
+    ports:
+      - "27017:27017"
+    volumes:
+      - adk_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: adk-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/adk_playground
+    ports:
+      - "7687:7687"
+      - "7474:7474"
+    volumes:
+      - adk_neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p adk_playground 'RETURN 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  adk_pg_data:
+  adk_mongo_data:
+  adk_neo4j_data:

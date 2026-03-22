@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# ADK Playground — Deploy to AWS Spot Instance
+# ADK-Rust Playground — Deploy to AWS Spot Instance
 # Prerequisites: AWS CLI configured, GOOGLE_API_KEY set
 #
 # Usage:
@@ -43,7 +43,7 @@ if [ -z "${GOOGLE_API_KEY:-}" ]; then
 fi
 
 echo "╔══════════════════════════════════════════╗"
-echo "║     ADK Playground — AWS Deployment      ║"
+echo "║   ADK-Rust Playground — AWS Deployment   ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 echo "  Region:    ${REGION}"

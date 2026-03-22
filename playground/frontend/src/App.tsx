@@ -814,12 +814,7 @@ function OutputContent({ stdout, isStreaming }: { stdout: string; isError?: bool
       )}
       {contentParts.map((cp, ci) => {
         if (cp.type === 'thinking') {
-          return (
-            <div key={`t-${ci}`} className="thinking-block">
-              <div className="thinking-label">💭 Thinking</div>
-              <div className="thinking-content">{cp.content}</div>
-            </div>
-          );
+          return <ThinkingBlock key={`t-${ci}`} content={cp.content} animate={!!isStreaming} />;
         }
         // For text parts, handle audio URLs within them
         const textContent = cp.content;

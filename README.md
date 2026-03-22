@@ -32,9 +32,30 @@ XAI_API_KEY=your_key cargo run --example xai_quickstart --features xai
 cargo run --example ollama_basic --features ollama
 ```
 
-## Playground
+## Try the Playground
 
-The playground is a web app for running ADK-Rust examples in the browser with streaming output, execution traces, token usage, and cost estimates.
+The fastest way to explore ADK-Rust is the online playground — no setup required:
+
+👉 **[playground.adk-rust.com](https://playground.adk-rust.com)**
+
+46 curated examples you can run instantly: agents, tools, thinking/reasoning, workflows, sessions, RAG, multi-agent systems, and more.
+
+| | |
+|---|---|
+| ![Editor](docs/screenshots/playground-editor.png) | ![Output](docs/screenshots/playground-output.png) |
+| Dark theme editor with 46 examples | Streaming output with model, tokens, and cost |
+| ![Trace](docs/screenshots/playground-trace.png) | ![Light](docs/screenshots/playground-light.png) |
+| Execution traces with LLM usage breakdown | Light theme support |
+
+Features:
+- Live code editor with syntax highlighting
+- Streaming output as your agent runs
+- Execution traces showing the full agent → LLM → tool call tree
+- Token usage and cost estimates per request
+- Dark and light themes
+- Thinking/reasoning content display for supported models
+
+### Run locally
 
 ```bash
 # Build the frontend
@@ -45,8 +66,6 @@ cd playground/backend && cargo run --release
 ```
 
 Then open http://localhost:9876.
-
-The playground includes 46 curated examples covering agents, tools, thinking/reasoning, workflows, sessions, RAG, and more.
 
 ## Examples by category
 

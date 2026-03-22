@@ -713,9 +713,9 @@ function StreamingAudioPlayer({ chunks, sampleRate, isStreaming }: {
 
 /** Typewriter hook — reveals text progressively to simulate streaming */
 function useTypewriter(text: string, active: boolean, charsPerTick = 12, intervalMs = 16): string {
-  const [displayed, setDisplayed] = useState('');
-  const indexRef = useRef(0);
-  const prevTextRef = useRef('');
+  const [displayed, setDisplayed] = useState(() => active ? '' : text);
+  const indexRef = useRef(active ? 0 : text.length);
+  const prevTextRef = useRef(text);
 
   useEffect(() => {
     if (!active) { setDisplayed(text); indexRef.current = text.length; prevTextRef.current = text; return; }

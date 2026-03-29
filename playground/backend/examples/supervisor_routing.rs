@@ -1,6 +1,6 @@
-use adk_rust::prelude::*;
-use adk_rust::graph::{StateGraph, NodeOutput, START, END};
 use adk_rust::graph::{AgentNode, ExecutionConfig};
+use adk_rust::graph::{NodeOutput, StateGraph, END, START};
+use adk_rust::prelude::*;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -23,17 +23,19 @@ async fn main() -> anyhow::Result<()> {
                  - 'writer' for writing/content tasks\n\
                  - 'coder' for programming/technical tasks\n\
                  - 'done' if the task is complete\n\n\
-                 Reply with ONLY the specialist name."
+                 Reply with ONLY the specialist name.",
             )
-            .build()?
+            .build()?,
     );
 
     // Specialist agents
     let researcher = Arc::new(
         LlmAgentBuilder::new("researcher")
             .model(model.clone())
-            .instruction("You are a research specialist. Provide detailed findings. Keep under 3 sentences.")
-            .build()?
+            .instruction(
+                "You are a research specialist. Provide detailed findings. Keep under 3 sentences.",
+            )
+            .build()?,
     );
     let writer = Arc::new(
         LlmAgentBuilder::new("writer")
@@ -44,8 +46,10 @@ async fn main() -> anyhow::Result<()> {
     let coder = Arc::new(
         LlmAgentBuilder::new("coder")
             .model(model)
-            .instruction("You are a coding specialist. Provide technical solutions. Keep under 3 sentences.")
-            .build()?
+            .instruction(
+                "You are a coding specialist. Provide technical solutions. Keep under 3 sentences.",
+            )
+            .build()?,
     );
 
     // Build nodes with input/output mappers
@@ -88,8 +92,12 @@ async fn main() -> anyhow::Result<()> {
                 let mut updates = HashMap::new();
                 for event in events {
                     if let Some(content) = event.content() {
-                        let text: String = content.parts.iter()
-                            .filter_map(|p| p.text()).collect::<Vec<_>>().join("");
+                        let text: String = content
+                            .parts
+                            .iter()
+                            .filter_map(|p| p.text())
+                            .collect::<Vec<_>>()
+                            .join("");
                         println!("{} Result: {}", emoji, &text[..text.len().min(100)]);
                         updates.insert("work_done".to_string(), json!(text));
                     }
@@ -116,12 +124,23 @@ async fn main() -> anyhow::Result<()> {
         .add_conditional_edges(
             "supervisor",
             |state| {
-                let next = state.get("next_agent").and_then(|v| v.as_str()).unwrap_or("done");
+                let next = state
+                    .get("next_agent")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("done");
                 let iteration = state.get("iteration").and_then(|v| v.as_i64()).unwrap_or(0);
-                if iteration >= 3 { return END.to_string(); }
+                if iteration >= 3 {
+                    return END.to_string();
+                }
                 next.to_string()
             },
-            [("researcher", "researcher"), ("writer", "writer"), ("coder", "coder"), ("done", END), (END, END)],
+            [
+                ("researcher", "researcher"),
+                ("writer", "writer"),
+                ("coder", "coder"),
+                ("done", END),
+                (END, END),
+            ],
         )
         .add_edge("researcher", "counter")
         .add_edge("writer", "counter")
@@ -130,9 +149,18 @@ async fn main() -> anyhow::Result<()> {
         .with_recursion_limit(10);
 
     let mut input = HashMap::new();
-    input.insert("task".to_string(), json!("Research the benefits of WebAssembly and write a brief summary"));
+    input.insert(
+        "task".to_string(),
+        json!("Research the benefits of WebAssembly and write a brief summary"),
+    );
 
     let result = graph.invoke(input, ExecutionConfig::new("task-1")).await?;
-    println!("\n✅ Final: {}", result.get("work_done").and_then(|v| v.as_str()).unwrap_or(""));
+    println!(
+        "\n✅ Final: {}",
+        result
+            .get("work_done")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+    );
     Ok(())
 }

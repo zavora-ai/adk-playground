@@ -1,7 +1,7 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -49,7 +49,10 @@ async fn main() -> anyhow::Result<()> {
         "calculate",
         "Evaluate a mathematical expression and return the numeric result",
         |_ctx, args| async move {
-            let expr = args.get("expression").and_then(|v| v.as_str()).unwrap_or("0");
+            let expr = args
+                .get("expression")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0");
             let result: f64 = match expr {
                 "120 / 2.25" | "120/2.25" => 53.33,
                 "53.33 * 0.621371" | "53.33*0.621371" => 33.14,
@@ -69,7 +72,10 @@ async fn main() -> anyhow::Result<()> {
         "Convert a value between units (distance, speed, temperature, weight)",
         |_ctx, args| async move {
             let value = args.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let from = args.get("from_unit").and_then(|v| v.as_str()).unwrap_or("?");
+            let from = args
+                .get("from_unit")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             let to = args.get("to_unit").and_then(|v| v.as_str()).unwrap_or("?");
             let result = match (from, to) {
                 ("km/h", "mph") => value * 0.621371,
@@ -98,21 +104,23 @@ async fn main() -> anyhow::Result<()> {
             .instruction(
                 "You are a precise math assistant. Think through problems carefully. \
                  Use the calculate tool for arithmetic and unit_convert for conversions. \
-                 Show your reasoning and verify results."
+                 Show your reasoning and verify results.",
             )
             .model(model)
             .tool(Arc::new(calc_tool))
             .tool(Arc::new(convert_tool))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -135,9 +143,14 @@ async fn main() -> anyhow::Result<()> {
     println!("### Turn 1: Multi-step calculation\n");
     let prompt1 = "A train travels 120 km in 2 hours and 15 minutes. \
              What is its average speed in both km/h and mph?";
-    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", prompt1);
+    println!(
+        "<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->",
+        prompt1
+    );
     let message = Content::new("user").with_text(prompt1);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     let mut thinking_count = 0;
     let mut tool_calls = 0;
@@ -152,20 +165,32 @@ async fn main() -> anyhow::Result<()> {
                         thinking_count += 1;
                         println!("<!--THINKING_START-->\n{}\n<!--THINKING_END-->", thinking);
                     }
-                    Part::FunctionCall { name, args, thought_signature, .. } => {
+                    Part::FunctionCall {
+                        name,
+                        args,
+                        thought_signature,
+                        ..
+                    } => {
                         tool_calls += 1;
                         println!("\n🔧 `{}({})`\n", name, args);
                         if let Some(sig) = thought_signature {
                             thought_sigs += 1;
-                            println!("🔗 thought\\_signature: `{}...` ({} chars)\n",
-                                &sig[..sig.len().min(40)], sig.len());
+                            println!(
+                                "🔗 thought\\_signature: `{}...` ({} chars)\n",
+                                &sig[..sig.len().min(40)],
+                                sig.len()
+                            );
                         }
                     }
-                    Part::FunctionResponse { function_response, .. } => {
+                    Part::FunctionResponse {
+                        function_response, ..
+                    } => {
                         println!("📋 `{}`\n", function_response.response);
                     }
                     _ => {
-                        if let Some(text) = part.text() { print!("{}", text); }
+                        if let Some(text) = part.text() {
+                            print!("{}", text);
+                        }
                     }
                 }
             }
@@ -180,15 +205,22 @@ async fn main() -> anyhow::Result<()> {
     }
 
     println!("\n---\n");
-    println!("**Turn 1 Summary:** {} thinking blocks, {} tool calls, {} thought signatures\n",
-        thinking_count, tool_calls, thought_sigs);
+    println!(
+        "**Turn 1 Summary:** {} thinking blocks, {} tool calls, {} thought signatures\n",
+        thinking_count, tool_calls, thought_sigs
+    );
 
     // ── Turn 2: Follow-up relies on preserved history + thought signatures ──
     println!("### Turn 2: Follow-up (history includes thought signatures)\n");
     let prompt2 = "Now convert that speed to a pace (minutes per mile) for a runner comparison.";
-    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", prompt2);
+    println!(
+        "<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->",
+        prompt2
+    );
     let message = Content::new("user").with_text(prompt2);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;
@@ -201,11 +233,15 @@ async fn main() -> anyhow::Result<()> {
                     Part::FunctionCall { name, args, .. } => {
                         println!("\n🔧 `{}({})`\n", name, args);
                     }
-                    Part::FunctionResponse { function_response, .. } => {
+                    Part::FunctionResponse {
+                        function_response, ..
+                    } => {
                         println!("📋 `{}`\n", function_response.response);
                     }
                     _ => {
-                        if let Some(text) = part.text() { print!("{}", text); }
+                        if let Some(text) = part.text() {
+                            print!("{}", text);
+                        }
                     }
                 }
             }

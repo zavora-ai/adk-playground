@@ -1,7 +1,7 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -26,10 +26,26 @@ struct TranslateArgs {
 async fn translate(args: TranslateArgs) -> adk_tool::Result<serde_json::Value> {
     // Simulated translation service
     let translated = match args.target_language.as_str() {
-        "fr" => format!("[FR] {}", args.text.replace("Hello", "Bonjour").replace("world", "monde")),
-        "de" => format!("[DE] {}", args.text.replace("Hello", "Hallo").replace("world", "Welt")),
-        "es" => format!("[ES] {}", args.text.replace("Hello", "Hola").replace("world", "mundo")),
-        "ja" => format!("[JA] {}", args.text.replace("Hello", "こんにちは").replace("world", "世界")),
+        "fr" => format!(
+            "[FR] {}",
+            args.text
+                .replace("Hello", "Bonjour")
+                .replace("world", "monde")
+        ),
+        "de" => format!(
+            "[DE] {}",
+            args.text.replace("Hello", "Hallo").replace("world", "Welt")
+        ),
+        "es" => format!(
+            "[ES] {}",
+            args.text.replace("Hello", "Hola").replace("world", "mundo")
+        ),
+        "ja" => format!(
+            "[JA] {}",
+            args.text
+                .replace("Hello", "こんにちは")
+                .replace("world", "世界")
+        ),
         _ => format!("[{}] {}", args.target_language.to_uppercase(), args.text),
     };
     Ok(serde_json::json!({
@@ -48,7 +64,10 @@ struct SentimentArgs {
 /// Analyze the sentiment of text.
 #[tool]
 async fn analyze_sentiment(args: SentimentArgs) -> adk_tool::Result<serde_json::Value> {
-    let score = if args.text.contains("love") || args.text.contains("great") || args.text.contains("excellent") {
+    let score = if args.text.contains("love")
+        || args.text.contains("great")
+        || args.text.contains("excellent")
+    {
         0.9
     } else if args.text.contains("hate") || args.text.contains("terrible") {
         -0.8
@@ -65,34 +84,36 @@ async fn analyze_sentiment(args: SentimentArgs) -> adk_tool::Result<serde_json::
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    let api_key = std::env::var("MISTRAL_API_KEY")
-        .expect("Set MISTRAL_API_KEY in your .env file");
+    let api_key = std::env::var("MISTRAL_API_KEY").expect("Set MISTRAL_API_KEY in your .env file");
 
     // Mistral Medium: strong multilingual + tool calling
-    let model = Arc::new(OpenAICompatible::new(
-        OpenAICompatibleConfig::mistral(api_key, "mistral-medium-latest")
-    )?);
+    let model = Arc::new(OpenAICompatible::new(OpenAICompatibleConfig::mistral(
+        api_key,
+        "mistral-medium-latest",
+    ))?);
 
     let agent = Arc::new(
         LlmAgentBuilder::new("multilingual_assistant")
             .instruction(
                 "You are a multilingual assistant. You can translate text and analyze sentiment. \
                  When asked to process text in multiple languages, use the appropriate tools. \
-                 Always respond with a brief summary of what you did."
+                 Always respond with a brief summary of what you did.",
             )
             .model(model)
             .tool(Arc::new(Translate))
             .tool(Arc::new(AnalyzeSentiment))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -111,18 +132,21 @@ async fn main() -> anyhow::Result<()> {
 
     println!("🌍 Mistral Medium — Multilingual Tools\n");
 
-    let message = Content::new("user")
-        .with_text(
-            "Translate 'Hello world, Rust is great!' to French and Spanish, \
-             then analyze the sentiment of the original text."
-        );
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let message = Content::new("user").with_text(
+        "Translate 'Hello world, Rust is great!' to French and Spanish, \
+             then analyze the sentiment of the original text.",
+    );
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

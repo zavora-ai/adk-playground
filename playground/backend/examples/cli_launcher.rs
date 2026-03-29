@@ -4,13 +4,13 @@
 //! and streaming — then demonstrates the agent works by running it
 //! through the Runner (Launcher uses Runner internally).
 
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
-use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
 use adk_artifact::InMemoryArtifactService;
 use adk_cli::Launcher;
 use adk_core::StreamingMode;
+use adk_core::{SessionId, UserId};
+use adk_rust::futures::StreamExt;
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -29,10 +29,10 @@ async fn main() -> anyhow::Result<()> {
             .instruction(
                 "You are a DevOps assistant that helps with deployment questions.\n\
                  You know about Docker, Kubernetes, CI/CD, and cloud platforms.\n\
-                 Be concise and practical."
+                 Be concise and practical.",
             )
             .model(model)
-            .build()?
+            .build()?,
     );
 
     // ── 2. Configure services ──
@@ -67,12 +67,14 @@ async fn main() -> anyhow::Result<()> {
     // ── 4. Run the agent to prove it works ──
     println!("--- Demo: running the configured agent ---\n");
 
-    sessions.create(CreateRequest {
-        app_name: "devops-assistant".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "devops-assistant".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "devops-assistant".into(),
@@ -94,12 +96,16 @@ async fn main() -> anyhow::Result<()> {
     print!("**Agent:** ");
 
     let message = Content::new("user").with_text(query);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

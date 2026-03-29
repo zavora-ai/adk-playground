@@ -38,8 +38,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "${GOOGLE_API_KEY:-}" ]; then
-  echo "Error: export GOOGLE_API_KEY first"
-  exit 1
+  echo "Warning: GOOGLE_API_KEY not set (Gemini examples won't work)"
 fi
 
 echo "╔══════════════════════════════════════════╗"
@@ -81,7 +80,13 @@ aws cloudformation deploy \
   --template-file "${SCRIPT_DIR}/cloudformation.yaml" \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides \
-    GoogleApiKey="$GOOGLE_API_KEY" \
+    GoogleApiKey="${GOOGLE_API_KEY:-}" \
+    OpenAIApiKey="${OPENAI_API_KEY:-}" \
+    AnthropicApiKey="${ANTHROPIC_API_KEY:-}" \
+    DeepSeekApiKey="${DEEPSEEK_API_KEY:-}" \
+    MistralApiKey="${MISTRAL_API_KEY:-}" \
+    XAIApiKey="${XAI_API_KEY:-}" \
+    OpenRouterApiKey="${OPENROUTER_API_KEY:-}" \
     SpotMaxPrice="$SPOT_MAX_PRICE" \
     InstanceType="$INSTANCE_TYPE" \
     DomainName="$DOMAIN" \

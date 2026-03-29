@@ -1,7 +1,7 @@
+use adk_rust::graph::{AgentNode, ExecutionConfig};
+use adk_rust::graph::{NodeOutput, StateGraph, END, START};
 use adk_rust::prelude::*;
 use adk_tool::tool;
-use adk_rust::graph::{StateGraph, NodeOutput, START, END};
-use adk_rust::graph::{AgentNode, ExecutionConfig};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::json;
@@ -53,11 +53,11 @@ async fn main() -> anyhow::Result<()> {
             .model(model)
             .instruction(
                 "You are a helpful assistant with tools. Use them when needed. \
-                 When you have enough information, provide a final answer."
+                 When you have enough information, provide a final answer.",
             )
             .tool(Arc::new(GetWeather))
             .tool(Arc::new(Calculator))
-            .build()?
+            .build()?,
     );
 
     // ReAct graph: reason → check if tools used → loop or finish
@@ -103,10 +103,19 @@ async fn main() -> anyhow::Result<()> {
         .add_conditional_edges(
             "reasoner",
             |state| {
-                let has_tools = state.get("has_tool_calls").and_then(|v| v.as_bool()).unwrap_or(false);
+                let has_tools = state
+                    .get("has_tool_calls")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
                 let iteration = state.get("iteration").and_then(|v| v.as_i64()).unwrap_or(0);
-                if iteration >= 3 { return END.to_string(); }
-                if has_tools { "counter".to_string() } else { END.to_string() }
+                if iteration >= 3 {
+                    return END.to_string();
+                }
+                if has_tools {
+                    "counter".to_string()
+                } else {
+                    END.to_string()
+                }
             },
             [("counter", "counter"), (END, END)],
         )
@@ -114,11 +123,26 @@ async fn main() -> anyhow::Result<()> {
         .with_recursion_limit(5);
 
     let mut input = HashMap::new();
-    input.insert("question".to_string(), json!("What's the weather in Paris and what's 15 + 25?"));
+    input.insert(
+        "question".to_string(),
+        json!("What's the weather in Paris and what's 15 + 25?"),
+    );
 
     let result = graph.invoke(input, ExecutionConfig::new("react-1")).await?;
 
-    println!("\n🎯 Final Answer: {}", result.get("response").and_then(|v| v.as_str()).unwrap_or(""));
-    println!("Iterations: {}", result.get("iteration").and_then(|v| v.as_i64()).unwrap_or(0));
+    println!(
+        "\n🎯 Final Answer: {}",
+        result
+            .get("response")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+    );
+    println!(
+        "Iterations: {}",
+        result
+            .get("iteration")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0)
+    );
     Ok(())
 }

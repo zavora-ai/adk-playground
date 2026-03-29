@@ -1,7 +1,7 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -13,22 +13,31 @@ async fn main() -> anyhow::Result<()> {
     let researcher = Arc::new(
         LlmAgentBuilder::new("researcher")
             .instruction("Research the given topic. Identify 3 key points with evidence.")
-            .model(Arc::new(GeminiModel::new(&api_key, "gemini-3.1-flash-lite-preview")?))
-            .build()?
+            .model(Arc::new(GeminiModel::new(
+                &api_key,
+                "gemini-3.1-flash-lite-preview",
+            )?))
+            .build()?,
     ) as Arc<dyn Agent>;
 
     let writer = Arc::new(
         LlmAgentBuilder::new("writer")
             .instruction("Take the research and write a polished 2-paragraph summary.")
-            .model(Arc::new(GeminiModel::new(&api_key, "gemini-3.1-flash-lite-preview")?))
-            .build()?
+            .model(Arc::new(GeminiModel::new(
+                &api_key,
+                "gemini-3.1-flash-lite-preview",
+            )?))
+            .build()?,
     ) as Arc<dyn Agent>;
 
     let editor = Arc::new(
         LlmAgentBuilder::new("editor")
             .instruction("Edit for clarity and conciseness. Fix any issues. Output final version.")
-            .model(Arc::new(GeminiModel::new(&api_key, "gemini-3.1-flash-lite-preview")?))
-            .build()?
+            .model(Arc::new(GeminiModel::new(
+                &api_key,
+                "gemini-3.1-flash-lite-preview",
+            )?))
+            .build()?,
     ) as Arc<dyn Agent>;
 
     // Chain: researcher → writer → editor
@@ -38,12 +47,14 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -61,15 +72,18 @@ async fn main() -> anyhow::Result<()> {
     })?;
 
     println!("Running 3-stage pipeline: researcher → writer → editor\n");
-    let message = Content::new("user")
-        .with_text("The impact of Rust on systems programming");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let message = Content::new("user").with_text("The impact of Rust on systems programming");
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

@@ -1,7 +1,7 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -36,8 +36,8 @@ struct TradeoffArgs {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    let api_key = std::env::var("ANTHROPIC_API_KEY")
-        .expect("Set ANTHROPIC_API_KEY in your .env file");
+    let api_key =
+        std::env::var("ANTHROPIC_API_KEY").expect("Set ANTHROPIC_API_KEY in your .env file");
 
     let tradeoff_tool = FunctionTool::new(
         "evaluate_tradeoff",
@@ -45,13 +45,23 @@ async fn main() -> anyhow::Result<()> {
         |_ctx, args| async move {
             let option = args.get("option").and_then(|v| v.as_str()).unwrap_or("?");
             let score = args.get("score").and_then(|v| v.as_u64()).unwrap_or(5);
-            let pros: Vec<String> = args.get("pros")
+            let pros: Vec<String> = args
+                .get("pros")
                 .and_then(|v| v.as_array())
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
-            let cons: Vec<String> = args.get("cons")
+            let cons: Vec<String> = args
+                .get("cons")
                 .and_then(|v| v.as_array())
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             Ok(serde_json::json!({
                 "option": option,
@@ -68,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
     let model = Arc::new(AnthropicClient::new(
         AnthropicConfig::new(&api_key, "claude-sonnet-4-5-20250929")
             .with_thinking(10240)
-            .with_max_tokens(16384)
+            .with_max_tokens(16384),
     )?);
 
     let agent = Arc::new(
@@ -77,20 +87,22 @@ async fn main() -> anyhow::Result<()> {
                 "You are a senior systems architect. Think deeply about design tradeoffs \
                  before responding. Use the evaluate_tradeoff tool to formally record each \
                  option you consider, scoring it 1-10. After evaluating all options, \
-                 give your final recommendation with clear justification."
+                 give your final recommendation with clear justification.",
             )
             .model(model)
             .tool(Arc::new(tradeoff_tool))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -119,9 +131,14 @@ async fn main() -> anyhow::Result<()> {
              - Budget: $50K/month infrastructure\n\n\
              Evaluate at least 3 different approaches (e.g., single DB, polyglot persistence, \
              CQRS+event sourcing) using the tradeoff tool, then recommend the best option.";
-    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", prompt);
+    println!(
+        "<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->",
+        prompt
+    );
     let message = Content::new("user").with_text(prompt);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     let mut saw_thinking = false;
     while let Some(event) = stream.next().await {
@@ -134,7 +151,9 @@ async fn main() -> anyhow::Result<()> {
                         println!("<!--THINKING_START-->\n{}\n<!--THINKING_END-->", thinking);
                     }
                     _ => {
-                        if let Some(text) = part.text() { print!("{}", text); }
+                        if let Some(text) = part.text() {
+                            print!("{}", text);
+                        }
                     }
                 }
             }

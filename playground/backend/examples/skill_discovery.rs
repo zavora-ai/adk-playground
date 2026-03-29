@@ -4,13 +4,11 @@
 //! best-matching skill into the agent's system prompt, then runs the
 //! skill-augmented agent against a real LLM.
 
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
-use adk_skill::{
-    discover_skill_files, load_skill_index, select_skills, SelectionPolicy,
-};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
+use adk_skill::{discover_skill_files, load_skill_index, select_skills, SelectionPolicy};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -73,11 +71,18 @@ You are a SQL analyst. For every query:
 
     // ── 3. Score skills against user query ──
     let query = "How do I handle async lifetimes in Rust?";
-    let policy = SelectionPolicy { top_k: 1, min_score: 0.1, ..Default::default() };
+    let policy = SelectionPolicy {
+        top_k: 1,
+        min_score: 0.1,
+        ..Default::default()
+    };
     let matches = select_skills(&index, query, &policy);
 
     let skill_instruction = if let Some(best) = matches.first() {
-        println!("Best skill match: '{}' (score: {:.2})", best.skill.name, best.score);
+        println!(
+            "Best skill match: '{}' (score: {:.2})",
+            best.skill.name, best.score
+        );
         // Read the skill file body to inject into the prompt
         let skill_content = std::fs::read_to_string(&best.skill.path).unwrap_or_default();
         let body = skill_content.split("---").nth(2).unwrap_or("").trim();
@@ -99,16 +104,18 @@ You are a SQL analyst. For every query:
         LlmAgentBuilder::new("skill_agent")
             .instruction(&skill_instruction)
             .model(model)
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -130,12 +137,16 @@ You are a SQL analyst. For every query:
     print!("**Agent (skill-augmented):** ");
 
     let message = Content::new("user").with_text(query);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

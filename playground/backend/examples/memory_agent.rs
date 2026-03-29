@@ -3,11 +3,11 @@
 //! Stores conversation memories and recalls them in new sessions,
 //! giving the agent persistent knowledge about the user.
 
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
-use adk_rust::futures::StreamExt;
-use adk_core::{Content, UserId, SessionId};
+use adk_core::{Content, SessionId, UserId};
 use adk_memory::{InMemoryMemoryService, MemoryEntry, MemoryService, SearchRequest};
+use adk_rust::futures::StreamExt;
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -26,23 +26,28 @@ struct RecallArgs {
 #[tool]
 async fn recall_memory(args: RecallArgs) -> adk_tool::Result<serde_json::Value> {
     let svc = MEMORY_SVC.get().unwrap();
-    match svc.search(SearchRequest {
-        query: args.query.clone(),
-        user_id: "user".into(),
-        app_name: "playground".into(),
-        limit: Some(5),
-        min_score: None,
-    }).await {
+    match svc
+        .search(SearchRequest {
+            query: args.query.clone(),
+            user_id: "user".into(),
+            app_name: "playground".into(),
+            limit: Some(5),
+            min_score: None,
+        })
+        .await
+    {
         Ok(resp) => {
-            let memories: Vec<_> = resp.memories.iter().map(|m| {
-                let text: String = m.content.parts.iter()
-                    .filter_map(|p| p.text())
-                    .collect();
-                serde_json::json!({
-                    "author": m.author,
-                    "text": text,
+            let memories: Vec<_> = resp
+                .memories
+                .iter()
+                .map(|m| {
+                    let text: String = m.content.parts.iter().filter_map(|p| p.text()).collect();
+                    serde_json::json!({
+                        "author": m.author,
+                        "text": text,
+                    })
                 })
-            }).collect();
+                .collect();
             Ok(serde_json::json!({
                 "query": args.query,
                 "found": memories.len(),
@@ -109,12 +114,14 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -136,12 +143,16 @@ async fn main() -> anyhow::Result<()> {
     print!("**Agent:** ");
 
     let message = Content::new("user").with_text(query);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

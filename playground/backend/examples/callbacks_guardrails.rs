@@ -1,7 +1,7 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,14 +23,16 @@ async fn main() -> anyhow::Result<()> {
                         if let Some(text) = part.text() {
                             if text.to_lowercase().contains("blocked_word") {
                                 println!("[GUARDRAIL] ⛔ Blocked content detected!");
-                                return Ok(Some(Content::new("model")
-                                    .with_text("I cannot process that request — content policy violation.")));
+                                return Ok(Some(Content::new("model").with_text(
+                                    "I cannot process that request — content policy violation.",
+                                )));
                             }
                             // Length guardrail
                             if text.len() > 500 {
                                 println!("[GUARDRAIL] ⛔ Message too long ({} chars)", text.len());
-                                return Ok(Some(Content::new("model")
-                                    .with_text("Message too long. Please keep it under 500 characters.")));
+                                return Ok(Some(Content::new("model").with_text(
+                                    "Message too long. Please keep it under 500 characters.",
+                                )));
                             }
                         }
                     }
@@ -38,16 +40,18 @@ async fn main() -> anyhow::Result<()> {
                     Ok(None) // Continue normal execution
                 })
             }))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -69,12 +73,16 @@ async fn main() -> anyhow::Result<()> {
     // Test 1: Normal message (passes guardrail)
     println!("--- Test 1: Normal message ---");
     let msg1 = Content::new("user").with_text("What is Rust?");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg1).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, msg1)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }
@@ -83,12 +91,16 @@ async fn main() -> anyhow::Result<()> {
     // Test 2: Blocked message (triggers guardrail)
     println!("--- Test 2: Blocked message ---");
     let msg2 = Content::new("user").with_text("Tell me about blocked_word please");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg2).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, msg2)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

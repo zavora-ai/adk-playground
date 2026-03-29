@@ -1,10 +1,8 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
-use adk_rust::model::openai::{
-    OpenAIResponsesClient, OpenAIResponsesConfig, ReasoningEffort,
-};
+use adk_rust::model::openai::{OpenAIResponsesClient, OpenAIResponsesConfig, ReasoningEffort};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -46,32 +44,33 @@ async fn fact_check(args: FactCheckArgs) -> adk_tool::Result<serde_json::Value> 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    let api_key = std::env::var("OPENAI_API_KEY")
-        .expect("Set OPENAI_API_KEY in your .env file");
+    let api_key = std::env::var("OPENAI_API_KEY").expect("Set OPENAI_API_KEY in your .env file");
 
     // o4-mini via Responses API — fast reasoning with configurable effort
-    let config = OpenAIResponsesConfig::new(api_key, "o4-mini")
-        .with_reasoning_effort(ReasoningEffort::Low);
+    let config =
+        OpenAIResponsesConfig::new(api_key, "o4-mini").with_reasoning_effort(ReasoningEffort::Low);
     let model = Arc::new(OpenAIResponsesClient::new(config)?);
 
     let agent = Arc::new(
         LlmAgentBuilder::new("fact_checker")
             .instruction(
                 "You are a fact-checking assistant. Use the fact_check tool to verify claims. \
-                 Summarize the verdict clearly with the confidence level."
+                 Summarize the verdict clearly with the confidence level.",
             )
             .model(model)
             .tool(Arc::new(FactCheck))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -92,13 +91,17 @@ async fn main() -> anyhow::Result<()> {
 
     let message = Content::new("user")
         .with_text("Please fact-check: Rust is a systems programming language created by Mozilla.");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

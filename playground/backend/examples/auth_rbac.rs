@@ -4,11 +4,11 @@
 //! allow/deny permissions, assign users to roles, and gate tool access.
 //! The agent's tools check permissions before executing.
 
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
-use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
 use adk_auth::{AccessControl, Permission, Role};
+use adk_core::{SessionId, UserId};
+use adk_rust::futures::StreamExt;
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -117,12 +117,31 @@ async fn main() -> anyhow::Result<()> {
     // ── 3. Demo permission checks ──
     println!("Permission checks for analyst@company.com:");
     let checks = [
-        ("search_database", ac.check("analyst@company.com", &Permission::Tool("search_database".into()))),
-        ("summarize", ac.check("analyst@company.com", &Permission::Tool("summarize".into()))),
-        ("admin_delete", ac.check("analyst@company.com", &Permission::Tool("admin_delete".into()))),
+        (
+            "search_database",
+            ac.check(
+                "analyst@company.com",
+                &Permission::Tool("search_database".into()),
+            ),
+        ),
+        (
+            "summarize",
+            ac.check("analyst@company.com", &Permission::Tool("summarize".into())),
+        ),
+        (
+            "admin_delete",
+            ac.check(
+                "analyst@company.com",
+                &Permission::Tool("admin_delete".into()),
+            ),
+        ),
     ];
     for (tool_name, result) in &checks {
-        let status = if result.is_ok() { "✓ ALLOWED" } else { "✗ DENIED" };
+        let status = if result.is_ok() {
+            "✓ ALLOWED"
+        } else {
+            "✗ DENIED"
+        };
         println!("  {} → {}", tool_name, status);
     }
     println!();
@@ -143,22 +162,24 @@ async fn main() -> anyhow::Result<()> {
                  - admin_delete: delete records (admin only)\n\n\
                  The current user is an analyst with limited permissions.\n\
                  If a tool returns ACCESS DENIED, explain that the user lacks permission.\n\
-                 Try to fulfill the request using the tools you have access to."
+                 Try to fulfill the request using the tools you have access to.",
             )
             .model(model)
             .tool(Arc::new(SearchDatabase))
             .tool(Arc::new(AdminDelete))
             .tool(Arc::new(Summarize))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -180,12 +201,16 @@ async fn main() -> anyhow::Result<()> {
     print!("**Agent:** ");
 
     let message = Content::new("user").with_text(query);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

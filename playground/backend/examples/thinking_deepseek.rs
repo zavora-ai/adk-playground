@@ -1,7 +1,7 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,31 +23,32 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    let api_key = std::env::var("DEEPSEEK_API_KEY")
-        .expect("Set DEEPSEEK_API_KEY in your .env file");
+    let api_key =
+        std::env::var("DEEPSEEK_API_KEY").expect("Set DEEPSEEK_API_KEY in your .env file");
 
     let model = Arc::new(DeepSeekClient::new(
-        DeepSeekConfig::reasoner(api_key)
-            .with_max_tokens(4096)
+        DeepSeekConfig::reasoner(api_key).with_max_tokens(4096),
     )?);
 
     let agent = Arc::new(
         LlmAgentBuilder::new("reasoning_engine")
             .instruction(
                 "You are a precise reasoning engine. Show every step of your logic. \
-                 Identify potential pitfalls and verify your answer before stating it."
+                 Identify potential pitfalls and verify your answer before stating it.",
             )
             .model(model)
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -74,9 +75,14 @@ async fn main() -> anyhow::Result<()> {
              Then verify: A train leaves City A at 9:00 AM traveling at 60 mph toward City B. \
              Another train leaves City B at 10:00 AM traveling at 90 mph toward City A. \
              The cities are 330 miles apart. At what time do the trains meet?";
-    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", prompt);
+    println!(
+        "<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->",
+        prompt
+    );
     let message = Content::new("user").with_text(prompt);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     let mut thinking_tokens = 0;
     while let Some(event) = stream.next().await {
@@ -89,7 +95,9 @@ async fn main() -> anyhow::Result<()> {
                         println!("<!--THINKING_START-->\n{}\n<!--THINKING_END-->", thinking);
                     }
                     _ => {
-                        if let Some(text) = part.text() { print!("{}", text); }
+                        if let Some(text) = part.text() {
+                            print!("{}", text);
+                        }
                     }
                 }
             }

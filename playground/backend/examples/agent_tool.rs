@@ -1,9 +1,9 @@
-use adk_rust::prelude::*;
-use adk_tool::tool;
-use adk_rust::tool::AgentTool;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
+use adk_rust::tool::AgentTool;
+use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -56,10 +56,8 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     // Wrap specialists as tools with timeouts to prevent runaway execution
-    let math_tool = AgentTool::new(Arc::new(math_agent))
-        .timeout(Duration::from_secs(30));
-    let trivia_tool = AgentTool::new(Arc::new(trivia_agent))
-        .timeout(Duration::from_secs(30));
+    let math_tool = AgentTool::new(Arc::new(math_agent)).timeout(Duration::from_secs(30));
+    let trivia_tool = AgentTool::new(Arc::new(trivia_agent)).timeout(Duration::from_secs(30));
 
     // Coordinator with limited iterations to prevent endless tool-calling loops
     let coordinator = Arc::new(
@@ -69,22 +67,24 @@ async fn main() -> anyhow::Result<()> {
                  - Math/calculations → math_expert\n\
                  - Trivia/facts → trivia_expert\n\
                  Call each specialist ONCE, then summarize their responses for the user.\n\
-                 Do NOT call the same specialist more than once."
+                 Do NOT call the same specialist more than once.",
             )
             .model(model)
             .tool(Arc::new(math_tool))
             .tool(Arc::new(trivia_tool))
             .max_iterations(10)
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -103,13 +103,17 @@ async fn main() -> anyhow::Result<()> {
 
     let message = Content::new("user")
         .with_text("What is 15% of 250, and who invented the percentage symbol?");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

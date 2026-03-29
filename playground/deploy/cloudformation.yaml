@@ -5,6 +5,37 @@ Parameters:
   GoogleApiKey:
     Type: String
     NoEcho: true
+    Default: ''
+
+  OpenAIApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+
+  AnthropicApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+
+  DeepSeekApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+
+  MistralApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+
+  XAIApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+
+  OpenRouterApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
 
   SpotMaxPrice:
     Type: String
@@ -113,6 +144,16 @@ Resources:
             dnf update -y
             dnf install -y gcc openssl-devel pkg-config git dbus-devel
 
+            # Install Docker
+            dnf install -y docker
+            systemctl enable --now docker
+            usermod -aG docker root
+
+            # Install Docker Compose plugin
+            mkdir -p /usr/local/lib/docker/cli-plugins
+            curl -sL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64" -o /usr/local/lib/docker/cli-plugins/docker-compose
+            chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
             export PATH="/root/.cargo/bin:$PATH"
 
@@ -129,9 +170,25 @@ Resources:
 
             cat > /opt/playground/.env <<EOF
             GOOGLE_API_KEY=${GoogleApiKey}
+            OPENAI_API_KEY=${OpenAIApiKey}
+            ANTHROPIC_API_KEY=${AnthropicApiKey}
+            DEEPSEEK_API_KEY=${DeepSeekApiKey}
+            MISTRAL_API_KEY=${MistralApiKey}
+            XAI_API_KEY=${XAIApiKey}
+            OPENROUTER_API_KEY=${OpenRouterApiKey}
+            POSTGRES_URL=postgres://adk:adk_playground@localhost:5433/adk_sessions
+            MONGODB_URL=mongodb://adk:adk_playground@localhost:27017
+            NEO4J_URL=bolt://localhost:7687
+            NEO4J_USER=neo4j
+            NEO4J_PASS=adk_playground
             PLAYGROUND_MODE=public
             PORT=8080
             EOF
+
+            # Start database containers
+            cd /opt/playground/playground
+            docker compose up -d
+            echo "=== DB containers started ==="
 
             # Update service: pulls latest code + rebuilds before playground starts
             cat > /etc/systemd/system/adk-playground-update.service <<EOF
@@ -143,7 +200,7 @@ Resources:
             Type=oneshot
             Environment=PATH=/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             WorkingDirectory=/opt/playground
-            ExecStart=/bin/bash -c 'git pull origin main 2>&1 && cd playground/backend && cargo build --release 2>&1'
+            ExecStart=/bin/bash -c 'git pull origin main 2>&1 && cd playground && docker compose up -d 2>&1 && cd backend && cargo build --release 2>&1'
             TimeoutStartSec=600
             [Install]
             WantedBy=multi-user.target
@@ -152,8 +209,8 @@ Resources:
             cat > /etc/systemd/system/adk-playground.service <<EOF
             [Unit]
             Description=ADK Playground
-            After=network.target adk-playground-update.service
-            Requires=adk-playground-update.service
+            After=network.target adk-playground-update.service docker.service
+            Requires=adk-playground-update.service docker.service
             [Service]
             Type=simple
             WorkingDirectory=/opt/playground/playground/backend
@@ -199,8 +256,8 @@ Resources:
             version = "0.1.0"
             edition = "2021"
             [dependencies]
-            adk-rust = { version = "0.4.0", default-features = false, features = ["full"] }
-            adk-tool = "0.4.0"
+            adk-rust = { version = "0.5.0", default-features = false, features = ["full"] }
+            adk-tool = "0.5.0"
             tokio = { version = "1", features = ["full"] }
             serde = { version = "1", features = ["derive"] }
             serde_json = "1"

@@ -1,7 +1,7 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -39,33 +39,35 @@ async fn debug_error(args: DebugArgs) -> adk_tool::Result<serde_json::Value> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    let api_key = std::env::var("XAI_API_KEY")
-        .expect("Set XAI_API_KEY in your .env file");
+    let api_key = std::env::var("XAI_API_KEY").expect("Set XAI_API_KEY in your .env file");
 
     // Grok-3-mini-fast: xAI's fast model with strong tool calling
-    let model = Arc::new(OpenAICompatible::new(
-        OpenAICompatibleConfig::xai(api_key, "grok-3-mini-fast")
-    )?);
+    let model = Arc::new(OpenAICompatible::new(OpenAICompatibleConfig::xai(
+        api_key,
+        "grok-3-mini-fast",
+    ))?);
 
     let agent = Arc::new(
         LlmAgentBuilder::new("debug_assistant")
             .instruction(
                 "You are a debugging assistant powered by Grok. Analyze errors using the \
                  debug_error tool, then explain the root cause and provide a clear fix. \
-                 Be direct and practical."
+                 Be direct and practical.",
             )
             .model(model)
             .tool(Arc::new(DebugError))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -84,19 +86,22 @@ async fn main() -> anyhow::Result<()> {
 
     println!("🔧 Grok-3-mini — Debugging Assistant\n");
 
-    let message = Content::new("user")
-        .with_text(
-            "I'm getting this Rust error: `thread 'main' panicked at 'called `Option::unwrap()` \
+    let message = Content::new("user").with_text(
+        "I'm getting this Rust error: `thread 'main' panicked at 'called `Option::unwrap()` \
              on a `None` value', src/main.rs:42:37`. The code is trying to parse a config file. \
-             Help me debug this."
-        );
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+             Help me debug this.",
+    );
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

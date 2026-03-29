@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } fro
 import { type OnMount } from '@monaco-editor/react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
@@ -865,9 +866,15 @@ function OutputContent({ stdout, isStreaming }: { stdout: string; isError?: bool
           }
           const text = part.content.trim();
           if (!text) return null;
+          // Add paragraph breaks around section headers (=== ... === and ── ... ──)
+          // and after blank lines so Markdown renders them with spacing.
+          const mdText = text
+            .replace(/\n{2,}/g, '\n\n')
+            .replace(/\n(={3,}[^\n]*={3,})\n/g, '\n\n$1\n\n')
+            .replace(/\n(─{2,}[^\n]*─{2,})\n/g, '\n\n$1\n\n');
           return (
-            <Markdown key={`${ci}-${pi}`} remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]}>
-              {text}
+            <Markdown key={`${ci}-${pi}`} remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]}>
+              {mdText}
             </Markdown>
           );
         });

@@ -4,12 +4,12 @@
 //! PluginManager, and runs an LLM agent with the plugin pipeline active.
 //! Watch the lifecycle events fire around the actual LLM call.
 
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
-use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
-use adk_plugin::{Plugin, PluginBuilder, PluginConfig, PluginManager};
 use adk_core::callbacks::BeforeModelResult;
+use adk_core::{SessionId, UserId};
+use adk_plugin::{Plugin, PluginBuilder, PluginConfig, PluginManager};
+use adk_rust::futures::StreamExt;
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -24,10 +24,16 @@ async fn main() -> anyhow::Result<()> {
         name: "logging".to_string(),
         on_user_message: Some(Box::new(|_ctx, content| {
             Box::pin(async move {
-                let text = content.parts.iter()
+                let text = content
+                    .parts
+                    .iter()
                     .filter_map(|p| p.text())
-                    .collect::<Vec<_>>().join(" ");
-                println!("  📝 [log] User message: \"{}\"", &text[..text.len().min(60)]);
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                println!(
+                    "  📝 [log] User message: \"{}\"",
+                    &text[..text.len().min(60)]
+                );
                 Ok(None)
             })
         })),
@@ -88,16 +94,18 @@ async fn main() -> anyhow::Result<()> {
         LlmAgentBuilder::new("plugged_agent")
             .instruction("You are a helpful assistant. Be concise (2-3 sentences).")
             .model(model)
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -120,12 +128,16 @@ async fn main() -> anyhow::Result<()> {
     let message = Content::new("user")
         .with_text("What are the benefits of plugin architectures in software systems?");
     print!("**Agent:** ");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

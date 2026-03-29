@@ -1,20 +1,23 @@
 mod examples;
 
 use axum::{
-    Router,
     extract::Json,
     http::StatusCode,
-    response::{IntoResponse, sse::{Event, Sse}},
+    response::{
+        sse::{Event, Sse},
+        IntoResponse,
+    },
     routing::{get, post},
+    Router,
 };
-use tokio::io::{AsyncBufReadExt, BufReader};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
@@ -78,11 +81,28 @@ struct TraceEvent {
 
 /// All API key env vars to forward to example processes
 const ENV_KEYS: &[&str] = &[
-    "GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-    "DEEPSEEK_API_KEY", "MISTRAL_API_KEY", "XAI_API_KEY",
-    "AZURE_AI_ENDPOINT", "AZURE_AI_API_KEY", "AZURE_AI_MODEL",
-    "AWS_REGION", "AWS_DEFAULT_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "BEDROCK_MODEL_ID",
-    "POSTGRES_URL", "MONGODB_URL", "NEO4J_URL", "NEO4J_USER", "NEO4J_PASS",
+    "GOOGLE_API_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "MISTRAL_API_KEY",
+    "XAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_MODEL",
+    "AZURE_AI_ENDPOINT",
+    "AZURE_AI_API_KEY",
+    "AZURE_AI_MODEL",
+    "AWS_REGION",
+    "AWS_DEFAULT_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "BEDROCK_MODEL_ID",
+    "POSTGRES_URL",
+    "MONGODB_URL",
+    "NEO4J_URL",
+    "NEO4J_USER",
+    "NEO4J_PASS",
 ];
 
 /// Returns true if the server is in public (restricted) mode.
@@ -136,8 +156,12 @@ async fn run_code(
     let workspace = &state.workspace_dir;
     let _lock = state.build_lock.lock().await;
     let err = |s: String, ms: u64| RunResponse {
-        success: false, stdout: String::new(), stderr: s,
-        duration_ms: ms, traces: Vec::new(), summary: None,
+        success: false,
+        stdout: String::new(),
+        stderr: s,
+        duration_ms: ms,
+        traces: Vec::new(),
+        summary: None,
     };
 
     let code_with_tracing = inject_tracing_init(&code);
@@ -160,24 +184,45 @@ async fn run_code(
         ensure_workspace(workspace).await;
 
         if let Err(e) = tokio::fs::write(workspace.join("src/main.rs"), &code_with_tracing).await {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to write source: {e}"), 0)));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(err(format!("Failed to write source: {e}"), 0)),
+            );
         }
 
         let build_output = tokio::time::timeout(
             std::time::Duration::from_secs(300),
-            Command::new("cargo").arg("build").current_dir(workspace)
-                .stdout(Stdio::piped()).stderr(Stdio::piped()).output(),
-        ).await;
+            Command::new("cargo")
+                .arg("build")
+                .current_dir(workspace)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output(),
+        )
+        .await;
         compile_ms = start.elapsed().as_millis() as u64;
 
         let build_result = match build_output {
             Ok(Ok(o)) => o,
-            Ok(Err(e)) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(err(format!("Failed to run cargo: {e}"), compile_ms))),
-            Err(_) => return (StatusCode::OK, Json(err("Build timed out (5 min limit).".into(), compile_ms))),
+            Ok(Err(e)) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(err(format!("Failed to run cargo: {e}"), compile_ms)),
+                )
+            }
+            Err(_) => {
+                return (
+                    StatusCode::OK,
+                    Json(err("Build timed out (5 min limit).".into(), compile_ms)),
+                )
+            }
         };
         if !build_result.status.success() {
             let stderr = String::from_utf8_lossy(&build_result.stderr).to_string();
-            return (StatusCode::OK, Json(err(format!("Compilation failed:\n{stderr}"), compile_ms)));
+            return (
+                StatusCode::OK,
+                Json(err(format!("Compilation failed:\n{stderr}"), compile_ms)),
+            );
         }
 
         // Cache the binary
@@ -186,7 +231,11 @@ async fn run_code(
         let _ = tokio::fs::create_dir_all(&cache_dir).await;
         let cached = cache_dir.join(format!("ex-{source_hash}"));
         if tokio::fs::copy(&built, &cached).await.is_ok() {
-            state.binary_cache.lock().await.insert(source_hash, cached.clone());
+            state
+                .binary_cache
+                .lock()
+                .await
+                .insert(source_hash, cached.clone());
             cached
         } else {
             built
@@ -196,7 +245,9 @@ async fn run_code(
     // Write .env next to binary working dir
     let mut env_lines = Vec::new();
     for key in ENV_KEYS {
-        if let Ok(val) = std::env::var(key) { env_lines.push(format!("{key}={val}")); }
+        if let Ok(val) = std::env::var(key) {
+            env_lines.push(format!("{key}={val}"));
+        }
     }
     if !env_lines.is_empty() {
         let _ = tokio::fs::write(workspace.join(".env"), env_lines.join("\n")).await;
@@ -209,12 +260,18 @@ async fn run_code(
         .current_dir(workspace)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .env("RUST_LOG", "info,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn");
+        .env(
+            "RUST_LOG",
+            "info,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn",
+        );
     for key in ENV_KEYS {
-        if let Ok(val) = std::env::var(key) { run_cmd.env(key, val); }
+        if let Ok(val) = std::env::var(key) {
+            run_cmd.env(key, val);
+        }
     }
 
-    let run_output = tokio::time::timeout(std::time::Duration::from_secs(300), run_cmd.output()).await;
+    let run_output =
+        tokio::time::timeout(std::time::Duration::from_secs(300), run_cmd.output()).await;
     let run_ms = run_start.elapsed().as_millis() as u64;
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -229,14 +286,34 @@ async fn run_code(
             let (input_tokens, output_tokens, total_tokens) = extract_token_usage(&stdout);
             let cost_estimate = estimate_cost(model.as_deref(), input_tokens, output_tokens);
             let summary = Some(RunSummary {
-                compile_ms, run_ms, model, input_tokens, output_tokens, total_tokens, cost_estimate,
+                compile_ms,
+                run_ms,
+                model,
+                input_tokens,
+                output_tokens,
+                total_tokens,
+                cost_estimate,
             });
-            (StatusCode::OK, Json(RunResponse {
-                success: output.status.success(), stdout, stderr, duration_ms, traces, summary,
-            }))
+            (
+                StatusCode::OK,
+                Json(RunResponse {
+                    success: output.status.success(),
+                    stdout,
+                    stderr,
+                    duration_ms,
+                    traces,
+                    summary,
+                }),
+            )
         }
-        Ok(Err(e)) => (StatusCode::OK, Json(err(format!("Run failed: {e}"), duration_ms))),
-        Err(_) => (StatusCode::OK, Json(err("Execution timed out (300s limit)".into(), duration_ms))),
+        Ok(Err(e)) => (
+            StatusCode::OK,
+            Json(err(format!("Run failed: {e}"), duration_ms)),
+        ),
+        Err(_) => (
+            StatusCode::OK,
+            Json(err("Execution timed out (300s limit)".into(), duration_ms)),
+        ),
     }
 }
 
@@ -342,7 +419,7 @@ async fn run_code_stream(
             .stderr(Stdio::piped())
             .env("RUST_LOG", "info,hyper=warn,reqwest=warn,h2=warn,rustls=warn,tonic=warn");
         for key in ENV_KEYS {
-            cmd.env(key, std::env::var(key).unwrap_or_default());
+            if let Ok(val) = std::env::var(key) { cmd.env(key, val); }
         }
         let mut child = match cmd.spawn()
         {
@@ -424,7 +501,6 @@ async fn run_code_stream(
     Sse::new(stream).into_response()
 }
 
-
 /// Extract model name from user code by looking for common patterns
 fn extract_model_from_code(code: &str) -> Option<String> {
     // Helper: extract the Nth quoted string after a position
@@ -448,7 +524,9 @@ fn extract_model_from_code(code: &str) -> Option<String> {
                     start = i + 1;
                 }
             }
-            if c == ')' && !in_string { break; }
+            if c == ')' && !in_string {
+                break;
+            }
         }
         None
     }
@@ -457,7 +535,9 @@ fn extract_model_from_code(code: &str) -> Option<String> {
     if let Some(pos) = code.find("GeminiModel::new(") {
         let after = &code[pos + "GeminiModel::new(".len()..];
         if let Some(m) = nth_quoted_string(after, 2) {
-            if !m.starts_with('&') { return Some(m); }
+            if !m.starts_with('&') {
+                return Some(m);
+            }
         }
     }
 
@@ -467,6 +547,7 @@ fn extract_model_from_code(code: &str) -> Option<String> {
         "AnthropicConfig::new(",
         "OpenAICompatibleConfig::mistral(",
         "OpenAICompatibleConfig::xai(",
+        "OpenRouterConfig::new(",
     ];
     for pat in &config_patterns {
         if let Some(pos) = code.find(pat) {
@@ -476,7 +557,9 @@ fn extract_model_from_code(code: &str) -> Option<String> {
             }
             // Fallback: first quoted string if only one arg
             if let Some(m) = nth_quoted_string(after, 1) {
-                if m.contains('-') || m.contains('/') { return Some(m); }
+                if m.contains('-') || m.contains('/') {
+                    return Some(m);
+                }
             }
         }
     }
@@ -496,7 +579,10 @@ fn extract_model_from_code(code: &str) -> Option<String> {
             let after = &code[pos + pat.len()..];
             if let Some(end) = after.find('"') {
                 let model = &after[..end];
-                if !model.is_empty() && model.len() < 60 && (model.contains('-') || model.contains('/')) {
+                if !model.is_empty()
+                    && model.len() < 60
+                    && (model.contains('-') || model.contains('/'))
+                {
                     return Some(model.to_string());
                 }
             }
@@ -514,23 +600,41 @@ fn extract_token_usage(stdout: &str) -> (Option<u64>, Option<u64>, Option<u64>) 
     for line in stdout.lines() {
         let lower = line.to_lowercase();
         if lower.contains("prompt") && lower.contains("token") {
-            if let Some(n) = extract_last_number(line) { input = Some(n); }
-        } else if (lower.contains("candidate") || lower.contains("output") || lower.contains("completion"))
+            if let Some(n) = extract_last_number(line) {
+                input = Some(n);
+            }
+        } else if (lower.contains("candidate")
+            || lower.contains("output")
+            || lower.contains("completion"))
             && lower.contains("token")
         {
-            if let Some(n) = extract_last_number(line) { output = Some(n); }
+            if let Some(n) = extract_last_number(line) {
+                output = Some(n);
+            }
         } else if lower.contains("total") && lower.contains("token") {
-            if let Some(n) = extract_last_number(line) { total = Some(n); }
+            if let Some(n) = extract_last_number(line) {
+                total = Some(n);
+            }
         } else if lower.contains("input:") && lower.contains("output:") {
             for p in line.split(',') {
                 let pl = p.to_lowercase();
-                if pl.contains("input") { if let Some(n) = extract_last_number(p) { input = Some(n); } }
-                if pl.contains("output") { if let Some(n) = extract_last_number(p) { output = Some(n); } }
+                if pl.contains("input") {
+                    if let Some(n) = extract_last_number(p) {
+                        input = Some(n);
+                    }
+                }
+                if pl.contains("output") {
+                    if let Some(n) = extract_last_number(p) {
+                        output = Some(n);
+                    }
+                }
             }
         }
     }
     if total.is_none() {
-        if let (Some(i), Some(o)) = (input, output) { total = Some(i + o); }
+        if let (Some(i), Some(o)) = (input, output) {
+            total = Some(i + o);
+        }
     }
     (input, output, total)
 }
@@ -543,7 +647,11 @@ fn extract_last_number(s: &str) -> Option<u64> {
 }
 
 /// Estimate cost in USD based on model pricing
-fn estimate_cost(model: Option<&str>, input_tokens: Option<u64>, output_tokens: Option<u64>) -> Option<f64> {
+fn estimate_cost(
+    model: Option<&str>,
+    input_tokens: Option<u64>,
+    output_tokens: Option<u64>,
+) -> Option<f64> {
     let (inp, out) = (input_tokens?, output_tokens?);
     // Prices per 1M tokens: (input, output)
     let (ip, op) = match model? {
@@ -640,7 +748,8 @@ fn parse_traces(raw_stderr: &str, _run_start_ms: u64) -> (String, Vec<TraceEvent
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(t) {
                 // Capture first timestamp as run start for relative timing
                 if run_start.is_none() {
-                    run_start = json.get("timestamp")
+                    run_start = json
+                        .get("timestamp")
                         .and_then(|v| v.as_str())
                         .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts).ok())
                         .map(|dt| dt.with_timezone(&chrono::Utc));
@@ -669,16 +778,28 @@ fn parse_traces(raw_stderr: &str, _run_start_ms: u64) -> (String, Vec<TraceEvent
     (user_stderr, traces)
 }
 
-fn parse_trace_json(json: &serde_json::Value, ms: u64, run_start: Option<&chrono::DateTime<chrono::Utc>>) -> Option<TraceEvent> {
+fn parse_trace_json(
+    json: &serde_json::Value,
+    ms: u64,
+    run_start: Option<&chrono::DateTime<chrono::Utc>>,
+) -> Option<TraceEvent> {
     // tracing-subscriber JSON format:
     // {"timestamp":"...","level":"INFO","fields":{"message":"...","tool.name":"..."},"target":"adk_agent::llm_agent","span":{"name":"agent.execute"},"spans":[...]}
     let level = json.get("level")?.as_str()?.to_lowercase();
     let target = json.get("target").and_then(|v| v.as_str()).unwrap_or("");
-    let fields = json.get("fields").cloned().unwrap_or(serde_json::Value::Null);
-    let message = fields.get("message").and_then(|m| m.as_str()).unwrap_or("").to_string();
+    let fields = json
+        .get("fields")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    let message = fields
+        .get("message")
+        .and_then(|m| m.as_str())
+        .unwrap_or("")
+        .to_string();
 
     // Parse real timestamp from tracing-subscriber output
-    let timestamp_ms = json.get("timestamp")
+    let timestamp_ms = json
+        .get("timestamp")
         .and_then(|v| v.as_str())
         .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts).ok())
         .map(|dt| {
@@ -692,7 +813,8 @@ fn parse_trace_json(json: &serde_json::Value, ms: u64, run_start: Option<&chrono
         .unwrap_or(ms);
 
     // Extract span info from "spans" array or "span" object
-    let span_name = json.get("span")
+    let span_name = json
+        .get("span")
         .and_then(|s| s.get("name"))
         .and_then(|n| n.as_str())
         .or_else(|| {
@@ -705,38 +827,50 @@ fn parse_trace_json(json: &serde_json::Value, ms: u64, run_start: Option<&chrono
         .unwrap_or("");
 
     // Extract agent name from spans
-    let agent = json.get("spans")
+    let agent = json
+        .get("spans")
         .and_then(|s| s.as_array())
         .and_then(|arr| {
             arr.iter().find_map(|s| {
-                s.get("agent.name").and_then(|v| v.as_str())
-                    .or_else(|| s.get("gcp.vertex.agent.agent_name").and_then(|v| v.as_str()))
+                s.get("agent.name").and_then(|v| v.as_str()).or_else(|| {
+                    s.get("gcp.vertex.agent.agent_name")
+                        .and_then(|v| v.as_str())
+                })
             })
         })
-        .or_else(|| {
-            fields.get("agent.name").and_then(|v| v.as_str())
-        })
+        .or_else(|| fields.get("agent.name").and_then(|v| v.as_str()))
         .map(|s| s.to_string());
 
     // Extract tool name
-    let tool = fields.get("tool.name")
+    let tool = fields
+        .get("tool.name")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
     // Extract detail (tool args or result)
-    let detail = fields.get("tool.args")
+    let detail = fields
+        .get("tool.args")
         .or_else(|| fields.get("tool.result"))
         .and_then(|v| v.as_str())
         .map(|s| {
-            if s.len() > 500 { format!("{}...", &s[..500]) } else { s.to_string() }
+            if s.len() > 500 {
+                format!("{}...", &s[..500])
+            } else {
+                s.to_string()
+            }
         });
 
     let kind = classify_trace(span_name, target, &message, tool.as_deref());
 
     // Skip noisy internal traces
-    if target.starts_with("hyper") || target.starts_with("reqwest") || target.starts_with("h2")
-        || target.starts_with("rustls") || target.starts_with("tonic") || target.starts_with("tower")
-        || target.starts_with("mio") || target.starts_with("want")
+    if target.starts_with("hyper")
+        || target.starts_with("reqwest")
+        || target.starts_with("h2")
+        || target.starts_with("rustls")
+        || target.starts_with("tonic")
+        || target.starts_with("tower")
+        || target.starts_with("mio")
+        || target.starts_with("want")
     {
         return None;
     }
@@ -744,7 +878,11 @@ fn parse_trace_json(json: &serde_json::Value, ms: u64, run_start: Option<&chrono
     Some(TraceEvent {
         timestamp_ms,
         level,
-        name: if span_name.is_empty() { target.to_string() } else { span_name.to_string() },
+        name: if span_name.is_empty() {
+            target.to_string()
+        } else {
+            span_name.to_string()
+        },
         message,
         agent,
         tool,
@@ -780,7 +918,10 @@ fn parse_trace_text(line: &str, ms: u64) -> Option<TraceEvent> {
         let name = span_part.split('{').next().unwrap_or(span_part).trim();
         (name.to_string(), msg_part.to_string())
     } else {
-        (rest.split_whitespace().next().unwrap_or("").to_string(), rest.to_string())
+        (
+            rest.split_whitespace().next().unwrap_or("").to_string(),
+            rest.to_string(),
+        )
     };
 
     let kind = classify_trace(&name, "", &message, tool.as_deref());
@@ -810,12 +951,20 @@ fn extract_field(text: &str, prefix: &str) -> Option<String> {
 
 fn classify_trace(name: &str, target: &str, message: &str, tool: Option<&str>) -> String {
     let msg_lower = message.to_lowercase();
-    if name.contains("agent.execute") || msg_lower.contains("agent execution") || msg_lower.contains("agent '") {
+    if name.contains("agent.execute")
+        || msg_lower.contains("agent execution")
+        || msg_lower.contains("agent '")
+    {
         "agent".to_string()
-    } else if name.contains("llm") || msg_lower.contains("llm_response") || msg_lower.contains("llm_call")
-        || target.contains("gemini") || target.contains("model") {
+    } else if name.contains("llm")
+        || msg_lower.contains("llm_response")
+        || msg_lower.contains("llm_call")
+        || target.contains("gemini")
+        || target.contains("model")
+    {
         "llm".to_string()
-    } else if msg_lower.contains("tool_call") || (tool.is_some() && msg_lower.contains("tool_call")) {
+    } else if msg_lower.contains("tool_call") || (tool.is_some() && msg_lower.contains("tool_call"))
+    {
         "tool_call".to_string()
     } else if msg_lower.contains("tool_result") {
         "tool_result".to_string()
@@ -845,24 +994,29 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-adk-rust = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-rust", default-features = false, features = ["full", "openai", "anthropic", "deepseek", "bedrock", "azure-ai", "postgres-session", "mongodb-session", "neo4j-session"] }
-adk-tool = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-tool" }
-adk-audio = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-audio", default-features = false, features = ["tts"] }
-adk-realtime = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-realtime", default-features = false, features = ["openai"] }
-adk-skill = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-skill" }
-adk-plugin = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-plugin" }
-adk-code = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-code" }
-adk-sandbox = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-sandbox" }
-adk-rag = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-rag" }
-adk-core = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-core" }
-adk-agent = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-agent", features = ["guardrails"] }
-adk-session = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-session" }
-adk-artifact = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-artifact" }
-adk-cli = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-cli" }
-adk-guardrail = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-guardrail" }
-adk-memory = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-memory" }
-adk-auth = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-auth" }
-adk-telemetry = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-telemetry" }
+adk-rust = { version = "0.5.0", default-features = false, features = ["full", "openai", "anthropic", "deepseek", "bedrock", "azure-ai", "openrouter", "postgres-session", "mongodb-session", "neo4j-session"] }
+adk-tool = "0.5.0"
+adk-audio = { version = "0.5.0", default-features = false, features = ["tts"] }
+adk-realtime = { version = "0.5.0", default-features = false, features = ["openai", "gemini"] }
+adk-skill = "0.5.0"
+adk-plugin = "0.5.0"
+adk-code = "0.5.0"
+adk-sandbox = "0.5.0"
+adk-rag = "0.5.0"
+adk-core = "0.5.0"
+adk-model = "0.5.0"
+adk-agent = { version = "0.5.0", features = ["guardrails"] }
+adk-session = { version = "0.5.0", features = ["encrypted-session"] }
+adk-graph = "0.5.0"
+adk-anthropic = "0.5.0"
+adk-artifact = "0.5.0"
+adk-cli = "0.5.0"
+adk-guardrail = "0.5.0"
+adk-memory = "0.5.0"
+adk-auth = { version = "0.5.0", features = ["sso"] }
+adk-payments = { version = "0.5.0", features = ["acp"] }
+adk-action = "0.5.0"
+adk-telemetry = "0.5.0"
 chrono = { version = "0.4", features = ["serde"] }
 rustls = { version = "0.23", features = ["ring"] }
 tokio = { version = "1", features = ["full"] }
@@ -879,6 +1033,8 @@ mongodb = "3"
 neo4rs = "0.8"
 tempfile = "3"
 serde_yaml = "0.9"
+regex = "1"
+sha2 = "0.10"
 "#;
 
 fn hash_source(code: &str) -> u64 {
@@ -908,7 +1064,11 @@ async fn prebuild_examples(state: &AppState, examples: &[examples::Example]) {
 
         // Skip if already cached on disk (survives server restarts)
         if cached_bin.exists() {
-            state.binary_cache.lock().await.insert(h, cached_bin.clone());
+            state
+                .binary_cache
+                .lock()
+                .await
+                .insert(h, cached_bin.clone());
             println!("   ♻️  {} (cached)", ex.id);
             continue;
         }
@@ -939,7 +1099,11 @@ async fn prebuild_examples(state: &AppState, examples: &[examples::Example]) {
             }
             Ok(o) => {
                 let stderr = String::from_utf8_lossy(&o.stderr);
-                eprintln!("   ❌ {} build failed: {}", ex.id, &stderr[..stderr.len().min(200)]);
+                eprintln!(
+                    "   ❌ {} build failed: {}",
+                    ex.id,
+                    &stderr[..stderr.len().min(200)]
+                );
             }
             Err(e) => {
                 eprintln!("   ❌ {} cargo error: {e}", ex.id);
@@ -999,7 +1163,10 @@ async fn main() {
         .and_then(|p| p.parse().ok())
         .unwrap_or(9876u16);
 
-    println!("🚀 ADK-Rust Playground server running on http://localhost:{}", port);
+    println!(
+        "🚀 ADK-Rust Playground server running on http://localhost:{}",
+        port
+    );
     println!("   Mode: {} | Custom code: {}", mode, !is_public_mode());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))

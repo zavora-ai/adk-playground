@@ -1,8 +1,8 @@
-use adk_rust::prelude::*;
-use adk_tool::tool;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
+use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -65,7 +65,9 @@ async fn convert_units(args: ConvertArgs) -> adk_tool::Result<serde_json::Value>
         ("lbs", "kg") => args.value / 2.20462,
         _ => args.value,
     };
-    Ok(serde_json::json!({ "value": args.value, "from": args.from, "to": args.to, "result": result }))
+    Ok(
+        serde_json::json!({ "value": args.value, "from": args.from, "to": args.to, "result": result }),
+    )
 }
 
 #[tokio::main]
@@ -81,22 +83,24 @@ async fn main() -> anyhow::Result<()> {
                  - get_weather: weather lookups\n\
                  - calculate: arithmetic operations\n\
                  - convert_units: unit conversions (celsius/fahrenheit, km/miles, kg/lbs)\n\
-                 Use the appropriate tool for each part of the user's request."
+                 Use the appropriate tool for each part of the user's request.",
             )
             .model(model)
             .tool(Arc::new(GetWeather))
             .tool(Arc::new(Calculate))
             .tool(Arc::new(ConvertUnits))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -113,15 +117,20 @@ async fn main() -> anyhow::Result<()> {
         cancellation_token: None,
     })?;
 
-    let message = Content::new("user")
-        .with_text("What's the weather in Tokyo? Convert 22°C to Fahrenheit. Also what's 15% of 250?");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let message = Content::new("user").with_text(
+        "What's the weather in Tokyo? Convert 22°C to Fahrenheit. Also what's 15% of 250?",
+    );
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

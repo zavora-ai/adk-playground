@@ -9,8 +9,7 @@
 // Requires: OPENAI_API_KEY
 
 use adk_realtime::{
-    openai::OpenAIRealtimeModel,
-    RealtimeConfig, RealtimeModel, RealtimeSessionExt, ServerEvent,
+    openai::OpenAIRealtimeModel, RealtimeConfig, RealtimeModel, RealtimeSessionExt, ServerEvent,
 };
 use base64::Engine;
 
@@ -34,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
             "You are a warm, expressive storyteller. The user will give you a topic. \
              Tell a vivid, captivating micro-story (about 30 seconds of speech). \
              Use dramatic pauses, varied pacing, and emotional inflection. \
-             Keep it concise but memorable."
+             Keep it concise but memorable.",
         )
         .with_voice("shimmer")
         .with_modalities(vec!["text".to_string(), "audio".to_string()]);
@@ -91,7 +90,8 @@ async fn main() -> anyhow::Result<()> {
     let audio_dir = std::path::PathBuf::from("audio-output");
     std::fs::create_dir_all(&audio_dir)?;
     let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?.as_secs();
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs();
     let filename = format!("realtime-{ts}.wav");
     std::fs::write(audio_dir.join(&filename), &wav)?;
 

@@ -4,14 +4,13 @@
 //! ingests programming language docs, and runs an agent that searches
 //! the knowledge base to answer questions.
 
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
-use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_core::{SessionId, UserId};
 use adk_rag::{
-    Document, EmbeddingProvider, FixedSizeChunker, InMemoryVectorStore,
-    RagConfig, RagPipeline,
+    Document, EmbeddingProvider, FixedSizeChunker, InMemoryVectorStore, RagConfig, RagPipeline,
 };
+use adk_rust::futures::StreamExt;
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -20,11 +19,15 @@ use std::sync::{Arc, OnceLock};
 
 /// TF-IDF-inspired embedder: maps words to dimensions via hashing.
 /// Production: use GeminiEmbeddingProvider or OpenAIEmbeddingProvider.
-struct TfIdfEmbedder { dims: usize }
+struct TfIdfEmbedder {
+    dims: usize,
+}
 
 impl TfIdfEmbedder {
     fn word_to_dim(&self, word: &str) -> usize {
-        word.bytes().fold(0usize, |acc, b| acc.wrapping_mul(31).wrapping_add(b as usize)) % self.dims
+        word.bytes().fold(0usize, |acc, b| {
+            acc.wrapping_mul(31).wrapping_add(b as usize)
+        }) % self.dims
     }
 }
 
@@ -32,25 +35,34 @@ impl TfIdfEmbedder {
 impl EmbeddingProvider for TfIdfEmbedder {
     async fn embed(&self, text: &str) -> adk_rag::Result<Vec<f32>> {
         let mut vector = vec![0.0f32; self.dims];
-        let words: Vec<&str> = text.split_whitespace()
+        let words: Vec<&str> = text
+            .split_whitespace()
             .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()))
             .filter(|w| w.len() > 2)
             .collect();
         let total = words.len() as f32;
-        if total == 0.0 { return Ok(vector); }
+        if total == 0.0 {
+            return Ok(vector);
+        }
 
         let mut freq: HashMap<usize, f32> = HashMap::new();
         for word in &words {
-            *freq.entry(self.word_to_dim(&word.to_lowercase())).or_default() += 1.0;
+            *freq
+                .entry(self.word_to_dim(&word.to_lowercase()))
+                .or_default() += 1.0;
         }
         for (dim, count) in freq {
             vector[dim] = count / total;
         }
         let norm: f32 = vector.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if norm > 0.0 { vector.iter_mut().for_each(|x| *x /= norm); }
+        if norm > 0.0 {
+            vector.iter_mut().for_each(|x| *x /= norm);
+        }
         Ok(vector)
     }
-    fn dimensions(&self) -> usize { self.dims }
+    fn dimensions(&self) -> usize {
+        self.dims
+    }
 }
 
 static PIPELINE: OnceLock<Arc<RagPipeline>> = OnceLock::new();
@@ -70,13 +82,17 @@ async fn search_docs(args: SearchArgs) -> adk_tool::Result<serde_json::Value> {
         Err(e) => return Ok(serde_json::json!({ "error": e.to_string() })),
     };
 
-    let hits: Vec<_> = results.iter().take(3).map(|r| {
-        serde_json::json!({
-            "document_id": r.chunk.document_id,
-            "text": r.chunk.text,
-            "score": format!("{:.3}", r.score),
+    let hits: Vec<_> = results
+        .iter()
+        .take(3)
+        .map(|r| {
+            serde_json::json!({
+                "document_id": r.chunk.document_id,
+                "text": r.chunk.text,
+                "score": format!("{:.3}", r.score),
+            })
         })
-    }).collect();
+        .collect();
 
     Ok(serde_json::json!({ "results": hits }))
 }
@@ -92,7 +108,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Quick similarity demo
     let v1 = embedder.embed("Rust programming language safety").await?;
-    let v2 = embedder.embed("Rust programming language performance").await?;
+    let v2 = embedder
+        .embed("Rust programming language performance")
+        .await?;
     let v3 = embedder.embed("cooking recipes for Italian pasta").await?;
     let sim_12: f32 = v1.iter().zip(&v2).map(|(a, b)| a * b).sum();
     let sim_13: f32 = v1.iter().zip(&v3).map(|(a, b)| a * b).sum();
@@ -103,11 +121,17 @@ async fn main() -> anyhow::Result<()> {
 
     let pipeline = Arc::new(
         RagPipeline::builder()
-            .config(RagConfig::builder().chunk_size(256).chunk_overlap(50).top_k(3).build()?)
+            .config(
+                RagConfig::builder()
+                    .chunk_size(256)
+                    .chunk_overlap(50)
+                    .top_k(3)
+                    .build()?,
+            )
             .embedding_provider(embedder)
             .vector_store(Arc::new(InMemoryVectorStore::new()))
             .chunker(Arc::new(FixedSizeChunker::new(256, 50)))
-            .build()?
+            .build()?,
     );
 
     pipeline.create_collection("languages").await?;
@@ -151,20 +175,22 @@ async fn main() -> anyhow::Result<()> {
                 "You are a programming language expert with a knowledge base.\n\
                  Use the search_docs tool to find information before answering.\n\
                  Compare languages objectively and cite the knowledge base.\n\
-                 Be concise."
+                 Be concise.",
             )
             .model(model)
             .tool(Arc::new(SearchDocs))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -187,12 +213,16 @@ async fn main() -> anyhow::Result<()> {
     print!("**Agent:** ");
 
     let message = Content::new("user").with_text(query);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

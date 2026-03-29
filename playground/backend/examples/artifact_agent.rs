@@ -3,11 +3,13 @@
 //! Agent that generates content and saves it as versioned artifacts,
 //! then retrieves and compares versions on request.
 
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_artifact::{
+    ArtifactService, InMemoryArtifactService, ListRequest, LoadRequest, SaveRequest,
+};
+use adk_core::{Part, SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{Part, UserId, SessionId};
-use adk_artifact::{ArtifactService, InMemoryArtifactService, SaveRequest, LoadRequest, ListRequest};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -28,14 +30,17 @@ struct SaveArgs {
 #[tool]
 async fn save_artifact(args: SaveArgs) -> adk_tool::Result<serde_json::Value> {
     let svc = ARTIFACT_SVC.get().unwrap();
-    let resp = match svc.save(SaveRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: "s1".into(),
-        file_name: args.file_name.clone(),
-        part: Part::Text { text: args.content },
-        version: None,
-    }).await {
+    let resp = match svc
+        .save(SaveRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: "s1".into(),
+            file_name: args.file_name.clone(),
+            part: Part::Text { text: args.content },
+            version: None,
+        })
+        .await
+    {
         Ok(r) => r,
         Err(e) => return Ok(serde_json::json!({ "error": e.to_string() })),
     };
@@ -58,13 +63,16 @@ struct LoadArgs {
 #[tool]
 async fn load_artifact(args: LoadArgs) -> adk_tool::Result<serde_json::Value> {
     let svc = ARTIFACT_SVC.get().unwrap();
-    match svc.load(LoadRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: "s1".into(),
-        file_name: args.file_name.clone(),
-        version: args.version,
-    }).await {
+    match svc
+        .load(LoadRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: "s1".into(),
+            file_name: args.file_name.clone(),
+            version: args.version,
+        })
+        .await
+    {
         Ok(resp) => {
             let text = match &resp.part {
                 Part::Text { text } => text.clone(),
@@ -83,11 +91,14 @@ async fn load_artifact(args: LoadArgs) -> adk_tool::Result<serde_json::Value> {
 #[tool]
 async fn list_artifacts() -> adk_tool::Result<serde_json::Value> {
     let svc = ARTIFACT_SVC.get().unwrap();
-    match svc.list(ListRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: "s1".into(),
-    }).await {
+    match svc
+        .list(ListRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: "s1".into(),
+        })
+        .await
+    {
         Ok(resp) => Ok(serde_json::json!({ "files": resp.file_names })),
         Err(e) => Ok(serde_json::json!({ "error": e.to_string() })),
     }
@@ -122,12 +133,14 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -149,12 +162,16 @@ async fn main() -> anyhow::Result<()> {
     print!("**Agent:** ");
 
     let message = Content::new("user").with_text(query);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

@@ -4,10 +4,10 @@
 //! sandbox. The agent decides when to execute code, sends it to the tool,
 //! and interprets the results — all via real LLM reasoning.
 
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -29,30 +29,45 @@ async fn execute_code(args: CodeExecArgs) -> adk_tool::Result<serde_json::Value>
     // Mock sandbox: simulate execution based on code content
     let code = &args.code;
     let (output, duration_ms) = if code.contains("fibonacci") || code.contains("fib") {
-        (serde_json::json!({
-            "result": [1, 1, 2, 3, 5, 8, 13, 21, 34, 55],
-            "note": "First 10 Fibonacci numbers"
-        }), 12)
+        (
+            serde_json::json!({
+                "result": [1, 1, 2, 3, 5, 8, 13, 21, 34, 55],
+                "note": "First 10 Fibonacci numbers"
+            }),
+            12,
+        )
     } else if code.contains("sort") {
-        (serde_json::json!({
-            "result": [1, 2, 3, 4, 5, 7, 8, 9],
-            "note": "Sorted array"
-        }), 8)
+        (
+            serde_json::json!({
+                "result": [1, 2, 3, 4, 5, 7, 8, 9],
+                "note": "Sorted array"
+            }),
+            8,
+        )
     } else if code.contains("factorial") {
-        (serde_json::json!({
-            "result": 120,
-            "note": "5! = 120"
-        }), 5)
+        (
+            serde_json::json!({
+                "result": 120,
+                "note": "5! = 120"
+            }),
+            5,
+        )
     } else if code.contains("prime") {
-        (serde_json::json!({
-            "result": [2, 3, 5, 7, 11, 13, 17, 19, 23, 29],
-            "note": "First 10 prime numbers"
-        }), 10)
+        (
+            serde_json::json!({
+                "result": [2, 3, 5, 7, 11, 13, 17, 19, 23, 29],
+                "note": "First 10 prime numbers"
+            }),
+            10,
+        )
     } else {
-        (serde_json::json!({
-            "result": "executed successfully",
-            "stdout": "Hello from sandbox!"
-        }), 3)
+        (
+            serde_json::json!({
+                "result": "executed successfully",
+                "stdout": "Hello from sandbox!"
+            }),
+            3,
+        )
     };
 
     Ok(serde_json::json!({
@@ -81,20 +96,22 @@ async fn main() -> anyhow::Result<()> {
                  1. Use the execute_code tool with Rust source code\n\
                  2. The code should define: fn run(input: serde_json::Value) -> serde_json::Value\n\
                  3. Interpret the results and explain them clearly\n\
-                 Be concise."
+                 Be concise.",
             )
             .model(model)
             .tool(Arc::new(ExecuteCode))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -116,12 +133,16 @@ async fn main() -> anyhow::Result<()> {
     print!("**Agent:** ");
 
     let message = Content::new("user").with_text(query);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

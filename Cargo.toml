@@ -49,7 +49,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.85.0"
 license = "Apache-2.0"
@@ -79,35 +79,35 @@ hex = "0.4"
 flate2 = "1.0"
 tar = "0.4"
 
-# ADK crates from crates.io
-adk-core = { version = "0.4.0" }
-adk-agent = { version = "0.4.0" }
-adk-model = { version = "0.4.0" }
-adk-tool = { version = "0.4.0" }
-adk-runner = { version = "0.4.0" }
-adk-server = { version = "0.4.0" }
-adk-session = { version = "0.4.0" }
-adk-artifact = { version = "0.4.0" }
-adk-memory = { version = "0.4.0" }
-adk-cli = { version = "0.4.0" }
-adk-realtime = { version = "0.4.0" }
-adk-graph = { version = "0.4.0" }
-adk-browser = { version = "0.4.0" }
-adk-eval = { version = "0.4.0" }
-adk-ui = { version = "0.3.2" }
-adk-telemetry = { version = "0.4.0" }
-adk-guardrail = { version = "0.4.0" }
-adk-auth = { version = "0.4.0" }
-adk-plugin = { version = "0.4.0" }
-adk-skill = { version = "0.4.0" }
-adk-gemini = { version = "0.4.0" }
-adk-code = { version = "0.4.0" }
-adk-sandbox = { version = "0.4.0" }
-adk-doc-audit = { version = "0.3.2" }
-adk-rag = { version = "0.4.0" }
-adk-audio = { version = "0.4.0" }
-adk-deploy = { version = "0.4.0" }
-adk-rust = { version = "0.4.0", default-features = false }
+# ADK crates — published on crates.io
+adk-core = "0.5.0"
+adk-agent = "0.5.0"
+adk-model = "0.5.0"
+adk-tool = "0.5.0"
+adk-runner = "0.5.0"
+adk-server = "0.5.0"
+adk-session = "0.5.0"
+adk-artifact = "0.5.0"
+adk-memory = "0.5.0"
+adk-cli = "0.5.0"
+adk-realtime = "0.5.0"
+adk-graph = "0.5.0"
+adk-browser = "0.5.0"
+adk-eval = "0.5.0"
+adk-ui = "0.5.0"
+adk-telemetry = "0.5.0"
+adk-guardrail = "0.5.0"
+adk-auth = "0.5.0"
+adk-plugin = "0.5.0"
+adk-skill = "0.5.0"
+adk-gemini = "0.5.0"
+adk-code = "0.5.0"
+adk-sandbox = "0.5.0"
+adk-doc-audit = "0.5.0"
+adk-rag = "0.5.0"
+adk-audio = "0.5.0"
+adk-deploy = "0.5.0"
+adk-rust = { version = "0.5.0", default-features = false }
 
 [profile.dev]
 debug = 1

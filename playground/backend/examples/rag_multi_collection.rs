@@ -3,14 +3,13 @@
 //! Creates separate collections for engineering and HR docs, ingests them,
 //! then builds an agent that queries the right collection to answer questions.
 
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
-use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_core::{SessionId, UserId};
 use adk_rag::{
-    Document, EmbeddingProvider, FixedSizeChunker, InMemoryVectorStore,
-    RagConfig, RagPipeline,
+    Document, EmbeddingProvider, FixedSizeChunker, InMemoryVectorStore, RagConfig, RagPipeline,
 };
+use adk_rust::futures::StreamExt;
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -23,16 +22,22 @@ struct HashEmbedder;
 #[async_trait::async_trait]
 impl EmbeddingProvider for HashEmbedder {
     async fn embed(&self, text: &str) -> adk_rag::Result<Vec<f32>> {
-        let hash = text.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
+        let hash = text
+            .bytes()
+            .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
         let mut v = vec![0.0f32; 64];
         for (i, x) in v.iter_mut().enumerate() {
             *x = ((hash.wrapping_add(i as u64)) as f32).sin();
         }
         let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if norm > 0.0 { v.iter_mut().for_each(|x| *x /= norm); }
+        if norm > 0.0 {
+            v.iter_mut().for_each(|x| *x /= norm);
+        }
         Ok(v)
     }
-    fn dimensions(&self) -> usize { 64 }
+    fn dimensions(&self) -> usize {
+        64
+    }
 }
 
 // We'll store the pipeline in a static for the tool to access
@@ -55,13 +60,17 @@ async fn search_knowledge_base(args: SearchArgs) -> adk_tool::Result<serde_json:
         Err(e) => return Ok(serde_json::json!({ "error": e.to_string() })),
     };
 
-    let hits: Vec<_> = results.iter().take(3).map(|r| {
-        serde_json::json!({
-            "document_id": r.chunk.document_id,
-            "text": r.chunk.text,
-            "score": r.score,
+    let hits: Vec<_> = results
+        .iter()
+        .take(3)
+        .map(|r| {
+            serde_json::json!({
+                "document_id": r.chunk.document_id,
+                "text": r.chunk.text,
+                "score": r.score,
+            })
         })
-    }).collect();
+        .collect();
 
     Ok(serde_json::json!({
         "collection": args.collection,
@@ -79,11 +88,17 @@ async fn main() -> anyhow::Result<()> {
     // ── 1. Build RAG pipeline with two collections ──
     let pipeline = Arc::new(
         RagPipeline::builder()
-            .config(RagConfig::builder().chunk_size(512).chunk_overlap(100).top_k(3).build()?)
+            .config(
+                RagConfig::builder()
+                    .chunk_size(512)
+                    .chunk_overlap(100)
+                    .top_k(3)
+                    .build()?,
+            )
             .embedding_provider(Arc::new(HashEmbedder))
             .vector_store(Arc::new(InMemoryVectorStore::new()))
             .chunker(Arc::new(FixedSizeChunker::new(512, 100)))
-            .build()?
+            .build()?,
     );
 
     pipeline.create_collection("engineering").await?;
@@ -153,12 +168,14 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -181,12 +198,16 @@ async fn main() -> anyhow::Result<()> {
     print!("**Agent:** ");
 
     let message = Content::new("user").with_text(query);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

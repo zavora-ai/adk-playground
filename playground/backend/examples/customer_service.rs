@@ -1,9 +1,9 @@
-use adk_rust::prelude::*;
-use adk_tool::tool;
-use adk_rust::tool::AgentTool;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
+use adk_rust::tool::AgentTool;
+use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -146,10 +146,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Wrap agents as callable tools so the coordinator gets results back
     // and can orchestrate multi-step workflows
-    let billing_tool = AgentTool::new(Arc::new(billing_agent))
-        .timeout(Duration::from_secs(30));
-    let manager_tool = AgentTool::new(Arc::new(manager_agent))
-        .timeout(Duration::from_secs(30));
+    let billing_tool = AgentTool::new(Arc::new(billing_agent)).timeout(Duration::from_secs(30));
+    let manager_tool = AgentTool::new(Arc::new(manager_agent)).timeout(Duration::from_secs(30));
 
     // ── Coordinator ──
     // Uses agents-as-tools to orchestrate the full resolution flow
@@ -180,12 +178,14 @@ async fn main() -> anyhow::Result<()> {
     // ── Session & Runner ────────────────────────────────────
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -214,20 +214,23 @@ async fn main() -> anyhow::Result<()> {
     println!("👤 Customer: I see two charges of $79 on March 1st for my Business Plan. \
               My account is alex@example.com. Please refund the duplicate and confirm it's approved.\n");
 
-    let msg = Content::new("user")
-        .with_text(
-            "I see two charges of $79 on March 1st for my Business Plan. \
+    let msg = Content::new("user").with_text(
+        "I see two charges of $79 on March 1st for my Business Plan. \
              My account is alex@example.com. Please refund the duplicate charge \
-             and get it fully approved so I know it's done."
-        );
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg).await?;
+             and get it fully approved so I know it's done.",
+    );
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, msg)
+        .await?;
 
     print!("🤖 Resolution: ");
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

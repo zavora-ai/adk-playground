@@ -15,6 +15,14 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
+          # API keys to write to .env on the server
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           # Find the running playground instance
           INSTANCE_ID=$(aws ec2 describe-instances \
@@ -27,18 +35,39 @@ jobs:
           fi
 
           echo "Deploying to $INSTANCE_ID..."
+
+          # Build the .env content from secrets
+          ENV_CONTENT=""
+          [ -n "$GOOGLE_API_KEY" ]    && ENV_CONTENT="${ENV_CONTENT}GOOGLE_API_KEY=${GOOGLE_API_KEY}\n"
+          [ -n "$OPENAI_API_KEY" ]    && ENV_CONTENT="${ENV_CONTENT}OPENAI_API_KEY=${OPENAI_API_KEY}\n"
+          [ -n "$ANTHROPIC_API_KEY" ] && ENV_CONTENT="${ENV_CONTENT}ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}\n"
+          [ -n "$DEEPSEEK_API_KEY" ]  && ENV_CONTENT="${ENV_CONTENT}DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}\n"
+          [ -n "$MISTRAL_API_KEY" ]   && ENV_CONTENT="${ENV_CONTENT}MISTRAL_API_KEY=${MISTRAL_API_KEY}\n"
+          [ -n "$XAI_API_KEY" ]       && ENV_CONTENT="${ENV_CONTENT}XAI_API_KEY=${XAI_API_KEY}\n"
+          [ -n "$OPENROUTER_API_KEY" ] && ENV_CONTENT="${ENV_CONTENT}OPENROUTER_API_KEY=${OPENROUTER_API_KEY}\n"
+          # DB connection strings for the Docker containers
+          ENV_CONTENT="${ENV_CONTENT}POSTGRES_URL=postgres://adk:adk_playground@localhost:5433/adk_sessions\n"
+          ENV_CONTENT="${ENV_CONTENT}MONGODB_URL=mongodb://adk:adk_playground@localhost:27017\n"
+          ENV_CONTENT="${ENV_CONTENT}NEO4J_URL=bolt://localhost:7687\n"
+          ENV_CONTENT="${ENV_CONTENT}NEO4J_USER=neo4j\n"
+          ENV_CONTENT="${ENV_CONTENT}NEO4J_PASS=adk_playground\n"
+          ENV_CONTENT="${ENV_CONTENT}PLAYGROUND_MODE=public\n"
+
+          # Escape for JSON
+          ENV_ESCAPED=$(echo -e "$ENV_CONTENT" | sed 's/"/\\"/g' | tr '\n' '|' | sed 's/|/\\n/g')
+
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "GitHub Actions deploy $(date -u +%Y%m%d-%H%M%S)" \
-            --parameters '{"commands":["export PATH=/root/.cargo/bin:$PATH && cd /opt/playground && git pull origin main 2>&1 && cd playground/backend && cargo build --release 2>&1 && systemctl restart adk-playground && echo DEPLOY_DONE"]}' \
-            --timeout-seconds 600 \
+            --parameters "{\"commands\":[\"set -e\",\"export PATH=/root/.cargo/bin:/usr/local/bin:\\$PATH\",\"cd /opt/playground\",\"git pull origin main 2>&1\",\"echo -e '${ENV_ESCAPED}' > playground/backend/.env\",\"cd playground && docker compose up -d 2>&1\",\"cd backend && cargo build --release 2>&1\",\"systemctl restart adk-playground\",\"echo DEPLOY_DONE\"]}" \
+            --timeout-seconds 900 \
             --query 'Command.CommandId' --output text)
 
           echo "SSM Command: $CMD_ID"
 
           # Poll for completion
-          for i in $(seq 1 60); do
+          for i in $(seq 1 90); do
             sleep 10
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \

@@ -6,9 +6,9 @@ Examples, playground, and documentation validation for [ADK-Rust](https://github
 
 | Directory | Description |
 |-----------|-------------|
-| `examples/` | 170+ runnable examples organized by provider and feature |
 | `playground/` | Web-based playground with live code editor, streaming output, and execution traces |
-| `docs_examples/` | Compilable code snippets that validate the official documentation |
+| `legacy-examples/` | 170+ runnable examples organized by provider and feature |
+| `legacy-docs_examples/` | Compilable code snippets that validate the official documentation |
 
 ## Quick start
 

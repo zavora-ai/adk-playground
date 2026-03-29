@@ -1,8 +1,8 @@
-use adk_rust::prelude::*;
-use adk_tool::tool;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
+use adk_tool::tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -84,21 +84,23 @@ async fn main() -> anyhow::Result<()> {
                  - Use add_to_cart to add items when the customer wants to buy.\n\
                  - Always check product availability before adding to cart.\n\
                  - If something is out of stock, mention the restock date if available.\n\
-                 - Keep responses concise and helpful."
+                 - Keep responses concise and helpful.",
             )
             .model(model)
             .tool(Arc::new(LookupProduct))
             .tool(Arc::new(AddToCart))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -119,29 +121,39 @@ async fn main() -> anyhow::Result<()> {
     println!("👤 User: I'm looking for a new laptop and some earbuds. What do you have?\n");
     let msg1 = Content::new("user")
         .with_text("I'm looking for a new laptop and some earbuds. What do you have?");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg1).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, msg1)
+        .await?;
     print!("🤖 Assistant: ");
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }
     println!("\n");
 
     // Turn 2: Follow-up referencing Turn 1 context + new action
-    println!("👤 User: Nice! Add the laptop and 2 AirPods to my cart. Also, is the iPad available?\n");
+    println!(
+        "👤 User: Nice! Add the laptop and 2 AirPods to my cart. Also, is the iPad available?\n"
+    );
     let msg2 = Content::new("user")
         .with_text("Nice! Add the laptop and 2 AirPods to my cart. Also, is the iPad available?");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg2).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, msg2)
+        .await?;
     print!("🤖 Assistant: ");
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }
@@ -149,15 +161,18 @@ async fn main() -> anyhow::Result<()> {
 
     // Turn 3: References all prior context
     println!("👤 User: What's my cart total so far?\n");
-    let msg3 = Content::new("user")
-        .with_text("What's my cart total so far?");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, msg3).await?;
+    let msg3 = Content::new("user").with_text("What's my cart total so far?");
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, msg3)
+        .await?;
     print!("🤖 Assistant: ");
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

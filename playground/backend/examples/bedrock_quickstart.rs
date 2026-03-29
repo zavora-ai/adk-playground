@@ -1,7 +1,7 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -108,21 +108,23 @@ async fn main() -> anyhow::Result<()> {
                 "You are a cloud solutions architect powered by Amazon Bedrock.\n\
                  Use review_architecture to create infrastructure recommendations,\n\
                  then use analyze_threats to assess security risks of the proposed components.\n\
-                 Present a clear architecture overview followed by the security analysis."
+                 Present a clear architecture overview followed by the security analysis.",
             )
             .model(model)
             .tool(Arc::new(review_tool))
             .tool(Arc::new(threat_tool))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -141,18 +143,21 @@ async fn main() -> anyhow::Result<()> {
 
     println!("🏗️  Amazon Bedrock — {} ({})\n", model_id, region);
 
-    let message = Content::new("user")
-        .with_text(
-            "Design a high-availability e-commerce API handling 5000 requests/second, \
-             then analyze the security threats for the proposed architecture."
-        );
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let message = Content::new("user").with_text(
+        "Design a high-availability e-commerce API handling 5000 requests/second, \
+             then analyze the security threats for the proposed architecture.",
+    );
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;
         if let Some(content) = &event.llm_response.content {
             for part in &content.parts {
-                if let Some(text) = part.text() { print!("{}", text); }
+                if let Some(text) = part.text() {
+                    print!("{}", text);
+                }
             }
         }
     }

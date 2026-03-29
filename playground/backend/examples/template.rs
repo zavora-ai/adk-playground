@@ -1,7 +1,7 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -18,10 +18,10 @@ async fn main() -> anyhow::Result<()> {
                 "You are assisting {user:name} who speaks {user:language}. \
                  Always respond in {user:language}. \
                  Their expertise level is {user:expertise}. \
-                 Adjust your explanations accordingly."
+                 Adjust your explanations accordingly.",
             )
             .model(model)
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
@@ -32,12 +32,14 @@ async fn main() -> anyhow::Result<()> {
     state.insert("user:language".to_string(), "French".into());
     state.insert("user:expertise".to_string(), "beginner".into());
 
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state,
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state,
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -56,7 +58,9 @@ async fn main() -> anyhow::Result<()> {
 
     // The agent will respond in French, adapted for a beginner named Alice
     let message = Content::new("user").with_text("Explain what an API is");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     while let Some(event) = stream.next().await {
         let event = event?;

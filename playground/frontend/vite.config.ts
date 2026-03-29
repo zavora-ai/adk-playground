@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
+    target: ['es2020', 'safari14'],
     rolldownOptions: {
       output: {
         chunkFileNames: 'assets/[name]-[hash].js',

@@ -127,14 +127,14 @@ const REGISTRY: &[ExampleMeta] = &[
         id: "graph_workflow",
         name: "Graph Pipeline",
         category: "Graph",
-        description: "Multi-node graph with state channels (no LLM needed)",
+        description: "Analyst → Writer → Editor agents in a sequential graph with deterministic data prep nodes",
         file: "graph_workflow.rs",
     },
     ExampleMeta {
         id: "graph_conditional",
         name: "Conditional Routing",
         category: "Graph",
-        description: "Priority-based conditional edge routing (no LLM needed)",
+        description: "LLM classifier routes support tickets to specialist agents via conditional edges",
         file: "graph_conditional.rs",
     },
     ExampleMeta {
@@ -230,6 +230,13 @@ const REGISTRY: &[ExampleMeta] = &[
         description: "Amazon Bedrock with Claude — cloud architecture design + threat modeling via IAM auth",
         file: "bedrock_quickstart.rs",
     },
+    ExampleMeta {
+        id: "openrouter_quickstart",
+        name: "OpenRouter",
+        category: "Providers",
+        description: "Multi-provider AI gateway — 200+ models with tool use, provider routing, and automatic fallback",
+        file: "openrouter_quickstart.rs",
+    },
     // ── Audio ──
     ExampleMeta {
         id: "poem_tts",
@@ -244,6 +251,34 @@ const REGISTRY: &[ExampleMeta] = &[
         category: "Audio",
         description: "OpenAI Realtime API — text prompt to expressive voice audio via WebSocket",
         file: "realtime_audio.rs",
+    },
+    ExampleMeta {
+        id: "realtime_session_update",
+        name: "Realtime Session Update",
+        category: "Audio",
+        description: "Mid-session persona switch — general assistant → travel agent with swapped tools, no reconnect",
+        file: "realtime_session_update.rs",
+    },
+    ExampleMeta {
+        id: "realtime_tools",
+        name: "Realtime Tools",
+        category: "Audio",
+        description: "Function calling in voice — weather, calculator, and time tools over a single WebSocket",
+        file: "realtime_tools.rs",
+    },
+    ExampleMeta {
+        id: "gemini_live_tools",
+        name: "Gemini Live Tools",
+        category: "Audio",
+        description: "Gemini Live voice agent with weather + time tools — native audio, tool call → response loop",
+        file: "gemini_live_tools.rs",
+    },
+    ExampleMeta {
+        id: "gemini_live_context",
+        name: "Gemini Live Context Switch",
+        category: "Audio",
+        description: "Mid-session persona switch via session resumption — tech support → billing agent with swapped tools",
+        file: "gemini_live_context.rs",
     },
     // ── Extensions ──
     ExampleMeta {
@@ -354,6 +389,167 @@ const REGISTRY: &[ExampleMeta] = &[
         category: "Advanced",
         description: "Role-based tool permissions — analyst can search but not delete, admin gets full access",
         file: "auth_rbac.rs",
+    },
+    // ── Security ──
+    ExampleMeta {
+        id: "auth_identity",
+        name: "Typed Identity",
+        category: "Security",
+        description: "Injection-proof identity system — validated IDs, null-byte rejection, multi-tenant session isolation",
+        file: "auth_identity.rs",
+    },
+    ExampleMeta {
+        id: "auth_audit",
+        name: "Audit Trail",
+        category: "Security",
+        description: "Tamper-evident access logging — RBAC permission matrix, AuditSink, AuthMiddleware tool protection",
+        file: "auth_audit.rs",
+    },
+    ExampleMeta {
+        id: "auth_sso",
+        name: "SSO & JWT",
+        category: "Security",
+        description: "Enterprise identity — Google/Azure/Okta SSO, JWT validation, OIDC discovery, claims-to-RBAC mapping",
+        file: "auth_sso.rs",
+    },
+    // ── Built-in Tools ──
+    ExampleMeta {
+        id: "builtin_gemini",
+        name: "Google Search (Gemini)",
+        category: "Built-in Tools",
+        description: "GoogleSearchTool wrapper — server-side search, grounding metadata, and thought signatures across multi-turn tool use",
+        file: "builtin_gemini.rs",
+    },
+    ExampleMeta {
+        id: "builtin_anthropic",
+        name: "Web Search (Anthropic)",
+        category: "Built-in Tools",
+        description: "WebSearchTool wrapper for Claude — server-side search with local function tools across multiple turns",
+        file: "builtin_anthropic.rs",
+    },
+    ExampleMeta {
+        id: "builtin_openai",
+        name: "Web Search (OpenAI)",
+        category: "Built-in Tools",
+        description: "OpenAIWebSearchTool wrapper — hosted search with local function tools across multiple turns",
+        file: "builtin_openai.rs",
+    },
+    // ── Payments ──
+    ExampleMeta {
+        id: "payments_checkout",
+        name: "Checkout Agent",
+        category: "Payments",
+        description: "AI-driven checkout lifecycle — create session, select fulfillment, authorize payment, verify status with evidence trail",
+        file: "payments_checkout.rs",
+    },
+    ExampleMeta {
+        id: "payments_guardrails",
+        name: "Payment Guardrails",
+        category: "Payments",
+        description: "Amount thresholds, merchant allowlists, policy sets, card/PII redaction, evidence references",
+        file: "payments_guardrails.rs",
+    },
+    ExampleMeta {
+        id: "payments_agent",
+        name: "Shopping Agent",
+        category: "Payments",
+        description: "LLM agent with checkout tools — browse, cart, guardrail-enforced payment, masked transaction status",
+        file: "payments_agent.rs",
+    },
+    // ── Action Nodes ──
+    // ── Competitive ──
+    ExampleMeta {
+        id: "competitive_auto_provider",
+        name: "Auto-Provider + Encryption",
+        category: "Competitive",
+        description: "provider_from_env() auto-detects API keys + EncryptedSession with AES-256-GCM at-rest encryption",
+        file: "competitive_auto_provider.rs",
+    },
+    ExampleMeta {
+        id: "competitive_graph_resume",
+        name: "Durable Graph Resume",
+        category: "Competitive",
+        description: "MemoryCheckpointer saves graph state — resume from checkpoint after crash, skip completed nodes",
+        file: "competitive_graph_resume.rs",
+    },
+    ExampleMeta {
+        id: "competitive_tool_search",
+        name: "Tool Search Filter",
+        category: "Competitive",
+        description: "ToolSearchConfig regex filtering — hide dangerous tools from the LLM while keeping them registered",
+        file: "competitive_tool_search.rs",
+    },
+    // ── Anthropic Features ──
+    ExampleMeta {
+        id: "anthropic_caching",
+        name: "Prompt Caching",
+        category: "Anthropic",
+        description: "Multi-turn agent with prompt caching — cache creation (25% surcharge) then cache hit (90% discount)",
+        file: "anthropic_caching.rs",
+    },
+    ExampleMeta {
+        id: "anthropic_vision",
+        name: "Vision Agent",
+        category: "Anthropic",
+        description: "Image analysis agent — Claude sees images via URL and logs structured observations with tools",
+        file: "anthropic_vision.rs",
+    },
+    ExampleMeta {
+        id: "anthropic_structured",
+        name: "Structured Extraction",
+        category: "Anthropic",
+        description: "Typed JSON extraction from unstructured text — tool schema forces structured output",
+        file: "anthropic_structured.rs",
+    },
+    ExampleMeta {
+        id: "anthropic_streaming",
+        name: "Streaming + Tools",
+        category: "Anthropic",
+        description: "Real-time streaming with mid-stream tool calls — time-to-first-token metrics",
+        file: "anthropic_streaming.rs",
+    },
+    ExampleMeta {
+        id: "anthropic_token_counting",
+        name: "Token Counting & Models",
+        category: "Anthropic",
+        description: "Model discovery, pre-flight token counting, cost estimation, and rate limit info",
+        file: "anthropic_token_counting.rs",
+    },
+    ExampleMeta {
+        id: "anthropic_multi_tool",
+        name: "Multi-Tool Agent",
+        category: "Anthropic",
+        description: "Travel assistant with weather, calculator, and unit converter — parallel tool orchestration",
+        file: "anthropic_multi_tool.rs",
+    },
+    ExampleMeta {
+        id: "anthropic_thinking_graph",
+        name: "Thinking Graph",
+        category: "Anthropic",
+        description: "Extended thinking (10K budget) in a StateGraph — deep thinker → concise summarizer pipeline",
+        file: "anthropic_thinking_graph.rs",
+    },
+    // ── Action Nodes ──
+    ExampleMeta {
+        id: "action_set_transform",
+        name: "Data Enrichment",
+        category: "Action Nodes",
+        description: "SET + TRANSFORM action nodes prep data, then an LLM agent writes personalized outreach",
+        file: "action_set_transform.rs",
+    },
+    ExampleMeta {
+        id: "action_switch_loop",
+        name: "Smart Ticket Router",
+        category: "Action Nodes",
+        description: "LLM classifier + deterministic SWITCH routing + specialist agents handle support tickets",
+        file: "action_switch_loop.rs",
+    },
+    ExampleMeta {
+        id: "action_workflow",
+        name: "Content Pipeline",
+        category: "Action Nodes",
+        description: "SET → Research Agent → TRANSFORM → Writer Agent → SWITCH → Editor Agent — full content pipeline",
+        file: "action_workflow.rs",
     },
 ];
 

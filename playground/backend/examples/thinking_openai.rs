@@ -1,11 +1,10 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
 use adk_rust::model::openai::{
-    OpenAIResponsesClient, OpenAIResponsesConfig,
-    ReasoningEffort, ReasoningSummary,
+    OpenAIResponsesClient, OpenAIResponsesConfig, ReasoningEffort, ReasoningSummary,
 };
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -35,15 +34,20 @@ struct VerifyArgs {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    let api_key = std::env::var("OPENAI_API_KEY")
-        .expect("Set OPENAI_API_KEY in your .env file");
+    let api_key = std::env::var("OPENAI_API_KEY").expect("Set OPENAI_API_KEY in your .env file");
 
     let verify_tool = FunctionTool::new(
         "verify_logic",
         "Verify a logical deduction and record whether it is true or false",
         |_ctx, args| async move {
-            let statement = args.get("statement").and_then(|v| v.as_str()).unwrap_or("?");
-            let verdict = args.get("verdict").and_then(|v| v.as_bool()).unwrap_or(false);
+            let statement = args
+                .get("statement")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            let verdict = args
+                .get("verdict")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             Ok(serde_json::json!({
                 "recorded": true,
                 "statement": statement,
@@ -68,10 +72,17 @@ async fn main() -> anyhow::Result<()> {
     println!("🧠 OpenAI Responses API — Reasoning Effort Comparison\n");
     println!("Using OpenAIResponsesClient (POST /v1/responses)");
     println!("Model: o4-mini with ReasoningSummary::Detailed\n");
-    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", puzzle);
+    println!(
+        "<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->",
+        puzzle
+    );
     println!("{}\n", "─".repeat(60));
 
-    for effort in [ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High] {
+    for effort in [
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+    ] {
         let label = match effort {
             ReasoningEffort::Low => "Low (fast, minimal thinking)",
             ReasoningEffort::Medium => "Medium (balanced)",
@@ -90,21 +101,23 @@ async fn main() -> anyhow::Result<()> {
                 .instruction(
                     "You are a logic puzzle solver. Work through the clues step by step. \
                      Use verify_logic to record each deduction you make. \
-                     After all deductions, state the final answer clearly."
+                     After all deductions, state the final answer clearly.",
                 )
                 .model(model)
                 .tool(tool.clone())
-                .build()?
+                .build()?,
         );
 
         let sessions = Arc::new(InMemorySessionService::new());
         let sid = format!("effort-{:?}", effort).to_lowercase();
-        sessions.create(CreateRequest {
-            app_name: "playground".into(),
-            user_id: "user".into(),
-            session_id: Some(sid.clone()),
-            state: HashMap::new(),
-        }).await?;
+        sessions
+            .create(CreateRequest {
+                app_name: "playground".into(),
+                user_id: "user".into(),
+                session_id: Some(sid.clone()),
+                state: HashMap::new(),
+            })
+            .await?;
 
         let runner = Runner::new(RunnerConfig {
             app_name: "playground".into(),
@@ -123,7 +136,9 @@ async fn main() -> anyhow::Result<()> {
 
         let start = std::time::Instant::now();
         let message = Content::new("user").with_text(puzzle);
-        let mut stream = runner.run(UserId::new("user")?, SessionId::new(&sid)?, message).await?;
+        let mut stream = runner
+            .run(UserId::new("user")?, SessionId::new(&sid)?, message)
+            .await?;
 
         while let Some(event) = stream.next().await {
             let event = event?;
@@ -134,13 +149,18 @@ async fn main() -> anyhow::Result<()> {
                             println!("<!--THINKING_START-->\n{}\n<!--THINKING_END-->", thinking);
                         }
                         _ => {
-                            if let Some(text) = part.text() { print!("{}", text); }
+                            if let Some(text) = part.text() {
+                                print!("{}", text);
+                            }
                         }
                     }
                 }
             }
         }
-        println!("\n\n⏱  Completed in {:.1}s\n", start.elapsed().as_secs_f64());
+        println!(
+            "\n\n⏱  Completed in {:.1}s\n",
+            start.elapsed().as_secs_f64()
+        );
         println!("{}\n", "─".repeat(60));
     }
 

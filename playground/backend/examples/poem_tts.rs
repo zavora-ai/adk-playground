@@ -7,11 +7,11 @@
 //
 // Requires: GOOGLE_API_KEY
 
-use adk_audio::{AudioFormat, CloudTtsConfig, GeminiTts, TtsProvider, TtsRequest, encode};
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_audio::{encode, AudioFormat, CloudTtsConfig, GeminiTts, TtsProvider, TtsRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -31,19 +31,21 @@ async fn main() -> anyhow::Result<()> {
                  the ocean at dawn, a forgotten garden, starlight on snow, rain on a tin roof, \
                  the passage of time, or a childhood memory. Use rich imagery, metaphor, and \
                  sensory detail. Vary line length for rhythm. End with a resonant closing image. \
-                 Output ONLY the poem — no title, no attribution, no commentary."
+                 Output ONLY the poem — no title, no attribution, no commentary.",
             )
             .model(model)
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -63,7 +65,9 @@ async fn main() -> anyhow::Result<()> {
     println!("🎭 Composing a poem...\n");
 
     let message = Content::new("user").with_text("Write me a beautiful poem.");
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
     let mut poem = String::new();
     while let Some(event) = stream.next().await {
         let event = event?;
@@ -110,14 +114,18 @@ async fn main() -> anyhow::Result<()> {
 
     let duration_s = frame.duration_ms as f64 / 1000.0;
     let size_kb = wav.len() / 1024;
-    println!("✅ Audio: {duration_s:.1}s · {}Hz · {size_kb}KB", frame.sample_rate);
+    println!(
+        "✅ Audio: {duration_s:.1}s · {}Hz · {size_kb}KB",
+        frame.sample_rate
+    );
     println!();
 
     // Write WAV for the playground server to serve
     let audio_dir = std::path::PathBuf::from("audio-output");
     std::fs::create_dir_all(&audio_dir)?;
     let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?.as_secs();
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs();
     let filename = format!("poem-{ts}.wav");
     std::fs::write(audio_dir.join(&filename), &wav)?;
 

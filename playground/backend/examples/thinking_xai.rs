@@ -1,7 +1,7 @@
-use adk_rust::prelude::*;
-use adk_rust::session::{SessionService, CreateRequest};
+use adk_core::{SessionId, UserId};
 use adk_rust::futures::StreamExt;
-use adk_core::{UserId, SessionId};
+use adk_rust::prelude::*;
+use adk_rust::session::{CreateRequest, SessionService};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -42,13 +42,13 @@ struct CrossCheckArgs {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    let api_key = std::env::var("XAI_API_KEY")
-        .expect("Set XAI_API_KEY in your .env file");
+    let api_key = std::env::var("XAI_API_KEY").expect("Set XAI_API_KEY in your .env file");
 
     // grok-3-mini: xAI's reasoning model with visible thinking
-    let model = Arc::new(OpenAICompatible::new(
-        OpenAICompatibleConfig::xai(api_key, "grok-3-mini")
-    )?);
+    let model = Arc::new(OpenAICompatible::new(OpenAICompatibleConfig::xai(
+        api_key,
+        "grok-3-mini",
+    ))?);
 
     let estimate_tool = FunctionTool::new(
         "record_estimate",
@@ -71,10 +71,18 @@ async fn main() -> anyhow::Result<()> {
         "cross_check",
         "Cross-check multiple estimates for consistency",
         |_ctx, args| async move {
-            let consistent = args.get("consistent").and_then(|v| v.as_bool()).unwrap_or(true);
-            let estimates: Vec<String> = args.get("estimates")
+            let consistent = args
+                .get("consistent")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            let estimates: Vec<String> = args
+                .get("estimates")
                 .and_then(|v| v.as_array())
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             Ok(serde_json::json!({
                 "estimates_checked": estimates.len(),
@@ -90,21 +98,23 @@ async fn main() -> anyhow::Result<()> {
             .instruction(
                 "You are a Fermi estimation expert. Break problems into smaller estimable \
                  quantities. Use record_estimate to log each sub-estimate, then use \
-                 cross_check to verify consistency. Show your reasoning clearly."
+                 cross_check to verify consistency. Show your reasoning clearly.",
             )
             .model(model)
             .tool(Arc::new(estimate_tool))
             .tool(Arc::new(crosscheck_tool))
-            .build()?
+            .build()?,
     );
 
     let sessions = Arc::new(InMemorySessionService::new());
-    sessions.create(CreateRequest {
-        app_name: "playground".into(),
-        user_id: "user".into(),
-        session_id: Some("s1".into()),
-        state: HashMap::new(),
-    }).await?;
+    sessions
+        .create(CreateRequest {
+            app_name: "playground".into(),
+            user_id: "user".into(),
+            session_id: Some("s1".into()),
+            state: HashMap::new(),
+        })
+        .await?;
 
     let runner = Runner::new(RunnerConfig {
         app_name: "playground".into(),
@@ -128,9 +138,14 @@ async fn main() -> anyhow::Result<()> {
              This is a classic Fermi estimation problem. Break it down step by step, \
              record each sub-estimate with the tool, then cross-check your estimates \
              for consistency before giving a final answer.";
-    println!("<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->", prompt);
+    println!(
+        "<!--USER_PROMPT_START-->\n{}\n<!--USER_PROMPT_END-->",
+        prompt
+    );
     let message = Content::new("user").with_text(prompt);
-    let mut stream = runner.run(UserId::new("user")?, SessionId::new("s1")?, message).await?;
+    let mut stream = runner
+        .run(UserId::new("user")?, SessionId::new("s1")?, message)
+        .await?;
 
     let mut thinking_blocks = 0;
     while let Some(event) = stream.next().await {
@@ -143,7 +158,9 @@ async fn main() -> anyhow::Result<()> {
                         println!("<!--THINKING_START-->\n{}\n<!--THINKING_END-->", thinking);
                     }
                     _ => {
-                        if let Some(text) = part.text() { print!("{}", text); }
+                        if let Some(text) = part.text() {
+                            print!("{}", text);
+                        }
                     }
                 }
             }

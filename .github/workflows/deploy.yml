@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'playground/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
@@ -52,6 +53,7 @@ jobs:
           ENV_CONTENT="${ENV_CONTENT}NEO4J_USER=neo4j\n"
           ENV_CONTENT="${ENV_CONTENT}NEO4J_PASS=adk_playground\n"
           ENV_CONTENT="${ENV_CONTENT}PLAYGROUND_MODE=public\n"
+          ENV_CONTENT="${ENV_CONTENT}PORT=8080\n"
 
           # Escape for JSON
           ENV_ESCAPED=$(echo -e "$ENV_CONTENT" | sed 's/"/\\"/g' | tr '\n' '|' | sed 's/|/\\n/g')
@@ -60,7 +62,7 @@ jobs:
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "GitHub Actions deploy $(date -u +%Y%m%d-%H%M%S)" \
-            --parameters "{\"commands\":[\"set -e\",\"export PATH=/root/.cargo/bin:/usr/local/bin:\\$PATH\",\"cd /opt/playground\",\"git pull origin main 2>&1\",\"echo -e '${ENV_ESCAPED}' > playground/backend/.env\",\"rm -rf /var/tmp/adk-playground-workspace/bin-cache\",\"cd playground && docker compose up -d 2>&1\",\"cd backend && cargo build --release 2>&1\",\"systemctl restart adk-playground\",\"echo DEPLOY_DONE\"]}" \
+            --parameters "{\"commands\":[\"set -e\",\"export PATH=/root/.cargo/bin:/usr/local/bin:\\$PATH\",\"cd /opt/playground\",\"git pull origin main 2>&1\",\"echo -e '${ENV_ESCAPED}' > /opt/playground/.env\",\"cp /opt/playground/.env playground/backend/.env\",\"rm -rf /var/tmp/adk-playground-workspace/bin-cache\",\"cd playground && docker compose up -d 2>&1\",\"cd backend && cargo build --release 2>&1\",\"systemctl restart adk-playground\",\"echo DEPLOY_DONE\"]}" \
             --timeout-seconds 900 \
             --query 'Command.CommandId' --output text)
 

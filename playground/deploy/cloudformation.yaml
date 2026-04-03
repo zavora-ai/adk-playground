@@ -57,6 +57,16 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
 
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Domain name for Caddy HTTPS (leave empty for IP-only access)
+
+  KeyPairName:
+    Type: String
+    Default: ''
+    Description: EC2 key pair name for SSH access (optional)
+
   GitHubRepo:
     Type: String
     Default: https://github.com/zavora-ai/adk-playground.git
@@ -168,22 +178,25 @@ Resources:
             cargo build --release
             echo "=== Backend built ==="
 
-            cat > /opt/playground/.env <<EOF
-            GOOGLE_API_KEY=${GoogleApiKey}
-            OPENAI_API_KEY=${OpenAIApiKey}
-            ANTHROPIC_API_KEY=${AnthropicApiKey}
-            DEEPSEEK_API_KEY=${DeepSeekApiKey}
-            MISTRAL_API_KEY=${MistralApiKey}
-            XAI_API_KEY=${XAIApiKey}
-            OPENROUTER_API_KEY=${OpenRouterApiKey}
+            cat > /opt/playground/.env <<'ENVEOF'
+            PLAYGROUND_MODE=public
+            PORT=8080
             POSTGRES_URL=postgres://adk:adk_playground@localhost:5433/adk_sessions
             MONGODB_URL=mongodb://adk:adk_playground@localhost:27017
             NEO4J_URL=bolt://localhost:7687
             NEO4J_USER=neo4j
             NEO4J_PASS=adk_playground
-            PLAYGROUND_MODE=public
-            PORT=8080
-            EOF
+            ENVEOF
+            # Append API keys (these come from CloudFormation params, need !Sub)
+            echo "GOOGLE_API_KEY=${GoogleApiKey}" >> /opt/playground/.env
+            echo "OPENAI_API_KEY=${OpenAIApiKey}" >> /opt/playground/.env
+            echo "ANTHROPIC_API_KEY=${AnthropicApiKey}" >> /opt/playground/.env
+            echo "DEEPSEEK_API_KEY=${DeepSeekApiKey}" >> /opt/playground/.env
+            echo "MISTRAL_API_KEY=${MistralApiKey}" >> /opt/playground/.env
+            echo "XAI_API_KEY=${XAIApiKey}" >> /opt/playground/.env
+            echo "OPENROUTER_API_KEY=${OpenRouterApiKey}" >> /opt/playground/.env
+            # Also write to backend dir for cargo run during dev
+            cp /opt/playground/.env /opt/playground/playground/backend/.env
 
             # Start database containers
             cd /opt/playground/playground
@@ -227,11 +240,20 @@ Resources:
             systemctl enable adk-playground-update
             systemctl enable --now adk-playground
 
-            cat > /etc/caddy/Caddyfile <<EOF
-            playground.adk-rust.com {
+            CADDY_DOMAIN="${DomainName}"
+            if [ -n "$CADDY_DOMAIN" ]; then
+              cat > /etc/caddy/Caddyfile <<CADDYEOF
+            $CADDY_DOMAIN {
               reverse_proxy localhost:8080
             }
-            EOF
+            CADDYEOF
+            else
+              cat > /etc/caddy/Caddyfile <<'CADDYEOF'
+            :80 {
+              reverse_proxy localhost:8080
+            }
+            CADDYEOF
+            fi
 
             cat > /etc/systemd/system/caddy.service <<EOF
             [Unit]
@@ -250,23 +272,58 @@ Resources:
 
             echo "=== Pre-warming compilation cache ==="
             mkdir -p /var/tmp/adk-playground-workspace/src
-            cat > /var/tmp/adk-playground-workspace/Cargo.toml <<EOF
+            python3 -c "
+            import textwrap, pathlib
+            pathlib.Path('/var/tmp/adk-playground-workspace/Cargo.toml').write_text(textwrap.dedent('''
             [package]
-            name = "playground-run"
-            version = "0.1.0"
-            edition = "2021"
+            name = \"playground-run\"
+            version = \"0.1.0\"
+            edition = \"2024\"
+
             [dependencies]
-            adk-rust = { version = "0.5.0", default-features = false, features = ["full"] }
-            adk-tool = "0.5.0"
-            tokio = { version = "1", features = ["full"] }
-            serde = { version = "1", features = ["derive"] }
-            serde_json = "1"
-            schemars = "0.8"
-            async-trait = "0.1"
-            anyhow = "1"
-            dotenvy = "0.15"
-            tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
-            EOF
+            adk-rust = { version = \"0.5.0\", default-features = false, features = [\"full\", \"openai\", \"anthropic\", \"deepseek\", \"bedrock\", \"azure-ai\", \"openrouter\", \"postgres-session\", \"mongodb-session\", \"neo4j-session\"] }
+            adk-tool = \"0.5.0\"
+            adk-audio = { version = \"0.5.0\", default-features = false, features = [\"tts\"] }
+            adk-realtime = { version = \"0.5.0\", default-features = false, features = [\"openai\", \"gemini\"] }
+            adk-skill = \"0.5.0\"
+            adk-plugin = \"0.5.0\"
+            adk-code = \"0.5.0\"
+            adk-sandbox = \"0.5.0\"
+            adk-rag = \"0.5.0\"
+            adk-core = \"0.5.0\"
+            adk-model = \"0.5.0\"
+            adk-agent = { version = \"0.5.0\", features = [\"guardrails\"] }
+            adk-session = { version = \"0.5.0\", features = [\"encrypted-session\"] }
+            adk-graph = \"0.5.0\"
+            adk-anthropic = \"0.5.0\"
+            adk-artifact = \"0.5.0\"
+            adk-cli = \"0.5.0\"
+            adk-guardrail = \"0.5.0\"
+            adk-memory = \"0.5.0\"
+            adk-auth = { version = \"0.5.0\", features = [\"sso\"] }
+            adk-payments = { version = \"0.5.0\", features = [\"acp\"] }
+            adk-action = \"0.5.0\"
+            adk-telemetry = \"0.5.0\"
+            chrono = { version = \"0.4\", features = [\"serde\"] }
+            rustls = { version = \"0.23\", features = [\"ring\"] }
+            tokio = { version = \"1\", features = [\"full\"] }
+            serde = { version = \"1\", features = [\"derive\"] }
+            serde_json = \"1\"
+            schemars = \"0.8\"
+            async-trait = \"0.1\"
+            anyhow = \"1\"
+            dotenvy = \"0.15\"
+            base64 = \"0.22\"
+            tracing-subscriber = { version = \"0.3\", features = [\"json\", \"env-filter\"] }
+            sqlx = { version = \"0.8\", features = [\"runtime-tokio-rustls\", \"postgres\"] }
+            mongodb = \"3\"
+            neo4rs = \"0.8\"
+            tempfile = \"3\"
+            serde_yaml = \"0.9\"
+            regex = \"1\"
+            sha2 = \"0.10\"
+            ''').strip())
+            "
             cat > /var/tmp/adk-playground-workspace/src/main.rs <<'WARMEOF'
             use adk_rust::prelude::*;
             use adk_tool::tool;

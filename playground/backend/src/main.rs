@@ -1133,13 +1133,16 @@ async fn main() {
         binary_cache: Arc::new(Mutex::new(HashMap::new())),
     };
 
-    // Pre-build all registered examples at startup
+    // Pre-build all registered examples in the background so the server starts immediately
     let examples = examples::load_examples();
     if !examples.is_empty() {
-        println!("🔨 Pre-building {} examples...", examples.len());
-        prebuild_examples(&state, &examples).await;
-        let cache = state.binary_cache.lock().await;
-        println!("✅ {} examples pre-built and cached", cache.len());
+        let prebuild_state = state.clone();
+        tokio::spawn(async move {
+            println!("🔨 Pre-building {} examples in background...", examples.len());
+            prebuild_examples(&prebuild_state, &examples).await;
+            let cache = prebuild_state.binary_cache.lock().await;
+            println!("✅ {} examples pre-built and cached", cache.len());
+        });
     }
 
     let cors = CorsLayer::new()

@@ -710,13 +710,179 @@ body {
 }
 
 @media (max-width: 900px) {
-  .sidebar { display: none; }
-  .output-area { width: 100%; border-left: none; border-top: 1px solid var(--border); max-height: 200px; }
-  .main { flex-direction: column; }
+  .app {
+    height: 100vh;
+    height: 100dvh; /* dynamic viewport height for mobile browsers */
+  }
+
+  .header {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .header-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .header-left h1 {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .subtitle { display: none; }
   .shortcut-hint { display: none; }
   .github-star-link { display: none; }
   .theme-label { display: none; }
-  .sponsor-text a { white-space: nowrap; }
+
+  .header-right {
+    gap: 8px;
+  }
+
+  .run-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .sponsor-banner {
+    font-size: 11px;
+    padding: 6px 12px;
+  }
+
+  .sponsor-text a {
+    white-space: nowrap;
+  }
+
+  .main {
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* Mobile sidebar: full-screen overlay */
+  .sidebar {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    z-index: 100;
+    border-right: none;
+    overflow-y: auto;
+  }
+
+  .sidebar.mobile-open {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar .sidebar-header {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
+  }
+
+  /* Editor takes remaining space */
+  .editor-area {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .editor-toolbar {
+    padding: 0 8px;
+    height: 32px;
+    font-size: 11px;
+  }
+
+  /* Output area: bottom panel */
+  .output-area {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    max-height: 45vh;
+    min-height: 120px;
+  }
+
+  .output-tabs {
+    height: 32px;
+    padding: 0 6px;
+  }
+
+  .output-tab {
+    font-size: 11px;
+    padding: 0 8px;
+  }
+
+  .output-content {
+    padding: 8px;
+  }
+
+  .output-markdown {
+    font-size: 13px;
+    padding: 8px;
+  }
+
+  .summary-bar {
+    font-size: 10px;
+    gap: 8px;
+    padding: 4px 8px;
+  }
+
+  .trace-tree {
+    font-size: 11px;
+    padding: 4px;
+  }
+
+  .trace-row {
+    padding: 4px 6px;
+    gap: 4px;
+  }
+
+  .trace-detail-panel {
+    margin-left: 12px;
+    font-size: 10px;
+  }
+
+  .trace-children {
+    margin-left: 10px;
+  }
+
+  .mode-badge {
+    font-size: 9px;
+    padding: 1px 6px;
+  }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+  .header-left h1 {
+    font-size: 13px;
+  }
+
+  .mode-badge { display: none; }
+  .status-dot { display: none; }
+
+  .theme-toggle {
+    padding: 4px 6px;
+  }
+
+  .run-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .output-area {
+    max-height: 40vh;
+  }
+
+  .editor-toolbar .file-tag { display: none; }
+  .editor-toolbar .duration { display: none; }
 }
 
 /* Sponsor banner */

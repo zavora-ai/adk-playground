@@ -889,7 +889,7 @@ function App() {
   const [selectedId, setSelectedId] = useState('');
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 900);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [serverMode, setServerMode] = useState<ServerInfo | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -1140,6 +1140,8 @@ function App() {
     setCode(ex.code);
     setSelectedId(ex.id);
     setResult(null);
+    // Close sidebar on mobile after selection
+    if (window.innerWidth <= 900) setSidebarOpen(false);
   };
 
   const toggleCategory = (cat: string) => {
@@ -1228,11 +1230,14 @@ function App() {
 
       <div className="main">
         {sidebarOpen && (
-          <aside className="sidebar">
+          <aside className="sidebar mobile-open">
             <div className="sidebar-header">
               <BookOpen size={16} />
               <span>Examples</span>
               <span className="example-count">{examples.length}</span>
+              <button className="toggle-sidebar" onClick={() => setSidebarOpen(false)} title="Close" style={{ marginLeft: 'auto' }}>
+                <X size={14} />
+              </button>
             </div>
             {categories.map(cat => {
               const catExamples = examples.filter(e => e.category === cat);

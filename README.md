@@ -2,58 +2,30 @@
 
 Examples, playground, and documentation validation for [ADK-Rust](https://github.com/zavora-ai/adk-rust) — the Rust Agent Development Kit.
 
-## What's here
-
-| Directory | Description |
-|-----------|-------------|
-| `playground/` | Web-based playground with live code editor, streaming output, and execution traces |
-| `legacy-examples/` | 170+ runnable examples organized by provider and feature |
-| `legacy-docs_examples/` | Compilable code snippets that validate the official documentation |
-
-## Quick start
-
-```bash
-# Gemini quickstart (default provider)
-GEMINI_API_KEY=your_key cargo run --example quickstart
-
-# OpenAI
-OPENAI_API_KEY=your_key cargo run --example openai_basic --features openai
-
-# Anthropic
-ANTHROPIC_API_KEY=your_key cargo run --example anthropic_quickstart --features anthropic
-
-# DeepSeek
-DEEPSEEK_API_KEY=your_key cargo run --example deepseek_quickstart --features deepseek
-
-# xAI (Grok)
-XAI_API_KEY=your_key cargo run --example xai_quickstart --features xai
-
-# Local models via Ollama
-cargo run --example ollama_basic --features ollama
-```
-
 ## Try the Playground
 
-The fastest way to explore ADK-Rust is the online playground — no setup required:
+The fastest way to explore ADK-Rust — no setup required:
 
 👉 **[playground.adk-rust.com](https://playground.adk-rust.com)**
 
-46 curated examples you can run instantly: agents, tools, thinking/reasoning, workflows, sessions, RAG, multi-agent systems, and more.
+73 curated examples across 20 categories: agents, tools, thinking/reasoning, workflows, sessions, RAG, payments, multi-agent systems, and more. Mobile friendly.
 
 | | |
 |---|---|
 | ![Editor](docs/screenshots/playground-editor.png) | ![Output](docs/screenshots/playground-output.png) |
-| Code editor with 46 examples in the sidebar | Streaming output with model, tokens, and cost |
-| ![Trace](docs/screenshots/playground-trace.png) | ![Dark](docs/screenshots/playground-light.png) |
-| Execution traces with LLM usage breakdown | Dark theme support |
+| Code editor with 73 examples across 20 categories | Streaming output with model, tokens, and cost |
+| ![Trace](docs/screenshots/playground-trace.png) | ![Light](docs/screenshots/playground-light.png) |
+| Execution traces with LLM usage breakdown | Light and dark theme support |
 
 Features:
 - Live code editor with syntax highlighting
 - Streaming output as your agent runs
 - Execution traces showing the full agent → LLM → tool call tree
 - Token usage and cost estimates per request
-- Dark and light themes
-- Thinking/reasoning content display for supported models
+- Dark, light, and system themes
+- Thinking/reasoning content display (Anthropic, DeepSeek, Gemini, OpenAI, xAI)
+- Audio playback for TTS and realtime voice examples
+- Mobile responsive layout
 
 ### Run locally
 
@@ -67,60 +39,92 @@ cd playground/backend && cargo run --release
 
 Then open http://localhost:9876.
 
-## Examples by category
+## What's here
 
-**Providers** — OpenAI, Anthropic, Google Gemini, DeepSeek, xAI/Grok, Groq, Mistral, Azure AI, AWS Bedrock, Ollama, mistral.rs (local)
+| Directory | Description |
+|-----------|-------------|
+| `playground/` | Web-based playground with live code editor, streaming output, and execution traces |
+| `legacy-examples/` | 170+ runnable examples organized by provider and feature |
+| `legacy-docs_examples/` | Compilable code snippets that validate the official documentation |
 
-**Agents** — LLM agents, graph agents, multi-agent systems, supervisor routing, customer service pipelines
+## Playground examples by category
 
-**Thinking/Reasoning** — Extended thinking with Anthropic, DeepSeek, Gemini, OpenAI, and xAI
+**Getting Started** — Quickstart, instruction templates, structured output
 
-**Tools** — Function tools, MCP (stdio + HTTP + OAuth), tool macros, agent-as-tool, multi-turn tool use, toolset composition
+**Function Tools** — Basic tools, multiple tools, multi-turn conversation
 
-**Workflows** — Sequential, parallel, conditional routing, loop refinement, graph workflows
+**Agents** — Agent-as-tool, customer service, LLM conditional router
 
-**RAG** — Basic retrieval, custom embedders, multi-collection, reranking, SurrealDB, markdown chunking
+**Callbacks** — Logging callbacks, input guardrails
 
-**Sessions** — In-memory, PostgreSQL, Redis, MongoDB, Neo4j, SQLite
+**Workflows** — Sequential pipeline, parallel analysis, iterative loop
 
-**Realtime** — WebSocket audio streaming, VAD, tool use during realtime sessions, agent handoff
+**Graph** — Graph pipeline, conditional routing, ReAct pattern, supervisor routing
 
-**Evaluation** — Agent eval, trajectory eval, semantic similarity, rubric scoring, LLM-as-judge
+**Sessions** — Session state, PostgreSQL, MongoDB, Neo4j
 
-**Deployment** — A2A protocol, REST servers, CLI launcher, session compaction
+**Providers** — OpenAI, Anthropic, DeepSeek, Mistral, xAI/Grok, Azure AI, AWS Bedrock, OpenRouter
 
-**UI** — React clients, UI protocol profiles, server-rendered agents
+**Audio** — Poem → Speech TTS, realtime voice, session updates, Gemini Live
 
-**Security** — RBAC, JWT auth, OIDC, SSO, Google OAuth, guardrails, schema validation
+**Extensions** — Skill discovery, plugin system
 
-**Other** — Artifacts, callbacks, code execution, memory, plugins, skills, structured output, telemetry
+**Coding** — Code execution sandbox, CLI launcher
 
-## Standalone crates
+**RAG** — Multi-collection, custom embedder
 
-Some examples are standalone crates with their own dependencies:
+**Thinking** — OpenAI reasoning effort, Anthropic extended thinking, DeepSeek chain-of-thought, xAI Grok, Gemini thought signatures
+
+**Advanced** — Artifact storage, long-term memory, advanced guardrails, RBAC access control
+
+**Security** — Typed identity, audit trail, SSO & JWT
+
+**Built-in Tools** — Google Search (Gemini), Web Search (Anthropic), Web Search (OpenAI)
+
+**Payments** — Checkout agent, payment guardrails, shopping agent
+
+**Competitive** — Auto-provider + encryption, durable graph resume, tool search filter
+
+**Anthropic** — Prompt caching, vision, structured extraction, streaming + tools, token counting, multi-tool, thinking graph
+
+**Action Nodes** — Data enrichment, smart ticket router, content pipeline
+
+## Legacy examples
+
+170+ standalone examples in `legacy-examples/` covering providers, tools, RAG, eval, realtime, UI, and more:
 
 ```bash
-cargo run -p ralph                  # Multi-agent research assistant
-cargo run -p audio                  # Audio pipeline (STT/TTS)
-cargo run -p postgres_session       # PostgreSQL session store
-cargo run -p redis_session          # Redis session store
-cargo run -p mongodb_session        # MongoDB session store
-cargo run -p neo4j_session          # Neo4j session store
-cargo run -p sqlite_memory          # SQLite memory store
+# Gemini quickstart (default provider)
+GOOGLE_API_KEY=your_key cargo run -p quickstart
+
+# OpenAI
+OPENAI_API_KEY=your_key cargo run -p openai_basic
+
+# Anthropic
+ANTHROPIC_API_KEY=your_key cargo run -p anthropic_quickstart
+
+# DeepSeek
+DEEPSEEK_API_KEY=your_key cargo run -p deepseek_basic
+
+# Multi-agent research assistant
+cargo run -p ralph
+
+# Audio pipeline (STT/TTS)
+cargo run -p audio
 ```
 
 ## Environment variables
 
-Create a `.env` file in `examples/` or set these in your shell:
+Create a `.env` file or set these in your shell:
 
 ```
-GEMINI_API_KEY=...
+GOOGLE_API_KEY=...
 OPENAI_API_KEY=...
 ANTHROPIC_API_KEY=...
 DEEPSEEK_API_KEY=...
 XAI_API_KEY=...
-GROQ_API_KEY=...
 MISTRAL_API_KEY=...
+OPENROUTER_API_KEY=...
 ```
 
 ## Requirements

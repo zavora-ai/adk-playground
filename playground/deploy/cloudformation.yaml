@@ -1,81 +1,69 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: ADK-Rust Playground - Spot Instance on default VPC
+Description: ADK-Rust Playground - On-demand ARM + CloudFront + ACM
 
 Parameters:
   GoogleApiKey:
     Type: String
     NoEcho: true
     Default: ''
-
   OpenAIApiKey:
     Type: String
     NoEcho: true
     Default: ''
-
   AnthropicApiKey:
     Type: String
     NoEcho: true
     Default: ''
-
   DeepSeekApiKey:
     Type: String
     NoEcho: true
     Default: ''
-
   MistralApiKey:
     Type: String
     NoEcho: true
     Default: ''
-
   XAIApiKey:
     Type: String
     NoEcho: true
     Default: ''
-
   OpenRouterApiKey:
     Type: String
     NoEcho: true
     Default: ''
-
   InstanceType:
     Type: String
     Default: t4g.medium
-
   VpcId:
     Type: AWS::EC2::VPC::Id
-    Description: VPC to deploy into (use default VPC)
-
+    Description: VPC to deploy into
   SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
-    Description: Public subnets (pick 2+ from default VPC)
-
+    Description: Public subnets (pick 2+)
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
-
   DomainName:
     Type: String
-    Default: ''
-    Description: Domain name for Caddy HTTPS (leave empty for IP-only access)
-
+    Default: playground.adk-rust.com
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Default: Z01737562QY7O0WZZDEQW
   KeyPairName:
     Type: String
     Default: ''
-    Description: EC2 key pair name for SSH access (optional)
-
   GitHubRepo:
     Type: String
     Default: https://github.com/zavora-ai/adk-playground.git
 
 Resources:
+  # --- Networking ---
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ADK Playground
       VpcId: !Ref VpcId
       SecurityGroupIngress:
-        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
-        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0}
+        - {IpProtocol: tcp, FromPort: 8080, ToPort: 8080, CidrIp: 0.0.0.0/0}
         - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
 
   ElasticIP:
@@ -83,6 +71,71 @@ Resources:
     Properties:
       Domain: vpc
 
+  # --- Route53: origin subdomain → EIP ---
+  OriginDNS:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'origin-playground.adk-rust.com'
+      Type: A
+      TTL: '60'
+      ResourceRecords:
+        - !Ref ElasticIP
+
+  # --- ACM Certificate (auto-validated via Route53) ---
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+
+  # --- CloudFront ---
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: ADK-Rust Playground
+        Aliases: [!Ref DomainName]
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        DefaultCacheBehavior:
+          TargetOriginId: ec2-origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD]
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: 216adef6-5c7f-47e4-b989-5492eafa07d3
+          Compress: true
+        Origins:
+          - Id: ec2-origin
+            DomainName: origin-playground.adk-rust.com
+            CustomOriginConfig:
+              HTTPPort: 8080
+              OriginProtocolPolicy: http-only
+              OriginReadTimeout: 60
+              OriginKeepaliveTimeout: 60
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+    DependsOn: OriginDNS
+
+  # --- Route53: playground.adk-rust.com → CloudFront ---
+  PlaygroundDNS:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront hosted zone ID (global constant)
+
+  # --- IAM ---
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -90,8 +143,7 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
+            Principal: {Service: ec2.amazonaws.com}
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
@@ -101,17 +153,15 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - ec2:AssociateAddress
-                  - ec2:DescribeAddresses
+                Action: [ec2:AssociateAddress, ec2:DescribeAddresses]
                 Resource: '*'
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Roles:
-        - !Ref InstanceRole
+      Roles: [!Ref InstanceRole]
 
+  # --- EC2 Launch Template ---
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -121,14 +171,10 @@ Resources:
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Arn: !GetAtt InstanceProfile.Arn
-        SecurityGroupIds:
-          - !Ref SecurityGroup
+        SecurityGroupIds: [!Ref SecurityGroup]
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
-            Ebs:
-              VolumeSize: 30
-              VolumeType: gp3
-              DeleteOnTermination: true
+            Ebs: {VolumeSize: 30, VolumeType: gp3, DeleteOnTermination: true}
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -140,33 +186,20 @@ Resources:
             INSTANCE_ID=$(ec2-metadata -i | cut -d' ' -f2)
             aws ec2 associate-address --instance-id "$INSTANCE_ID" --allocation-id "${ElasticIP.AllocationId}" --region ${AWS::Region} || true
 
-            # Create 4GB swap to prevent OOM during compilation
-            fallocate -l 4G /swapfile
-            chmod 600 /swapfile
-            mkswap /swapfile
-            swapon /swapfile
+            fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
             echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
 
             dnf update -y
-            dnf install -y gcc openssl-devel pkg-config git dbus-devel
-
-            # Install Docker
-            dnf install -y docker
+            dnf install -y gcc openssl-devel pkg-config git dbus-devel docker
             systemctl enable --now docker
             usermod -aG docker root
 
-            # Install Docker Compose plugin
             mkdir -p /usr/local/lib/docker/cli-plugins
             curl -sL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64" -o /usr/local/lib/docker/cli-plugins/docker-compose
             chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
             export PATH="/root/.cargo/bin:$PATH"
-
-            # Install Caddy from binary
-            curl -sL "https://caddyserver.com/api/download?os=linux&arch=arm64" -o /usr/bin/caddy
-            chmod +x /usr/bin/caddy
-            mkdir -p /etc/caddy
 
             cd /opt
             git clone --depth 1 ${GitHubRepo} playground
@@ -183,7 +216,6 @@ Resources:
             NEO4J_USER=neo4j
             NEO4J_PASS=adk_playground
             ENVEOF
-            # Append API keys (these come from CloudFormation params, need !Sub)
             echo "GOOGLE_API_KEY=${GoogleApiKey}" >> /opt/playground/.env
             echo "OPENAI_API_KEY=${OpenAIApiKey}" >> /opt/playground/.env
             echo "ANTHROPIC_API_KEY=${AnthropicApiKey}" >> /opt/playground/.env
@@ -191,15 +223,12 @@ Resources:
             echo "MISTRAL_API_KEY=${MistralApiKey}" >> /opt/playground/.env
             echo "XAI_API_KEY=${XAIApiKey}" >> /opt/playground/.env
             echo "OPENROUTER_API_KEY=${OpenRouterApiKey}" >> /opt/playground/.env
-            # Also write to backend dir for cargo run during dev
             cp /opt/playground/.env /opt/playground/playground/backend/.env
 
-            # Start database containers
             cd /opt/playground/playground
             docker compose up -d
             echo "=== DB containers started ==="
 
-            # Update service: pulls latest code + rebuilds before playground starts
             cat > /etc/systemd/system/adk-playground-update.service <<EOF
             [Unit]
             Description=ADK Playground - Git Pull & Build
@@ -235,36 +264,6 @@ Resources:
             systemctl daemon-reload
             systemctl enable adk-playground-update
             systemctl enable --now adk-playground
-
-            CADDY_DOMAIN="${DomainName}"
-            if [ -n "$CADDY_DOMAIN" ]; then
-              cat > /etc/caddy/Caddyfile <<CADDYEOF
-            $CADDY_DOMAIN {
-              reverse_proxy localhost:8080
-            }
-            CADDYEOF
-            else
-              cat > /etc/caddy/Caddyfile <<'CADDYEOF'
-            :80 {
-              reverse_proxy localhost:8080
-            }
-            CADDYEOF
-            fi
-
-            cat > /etc/systemd/system/caddy.service <<EOF
-            [Unit]
-            Description=Caddy
-            After=network.target
-            [Service]
-            Type=simple
-            ExecStart=/usr/bin/caddy run --config /etc/caddy/Caddyfile
-            Restart=always
-            [Install]
-            WantedBy=multi-user.target
-            EOF
-
-            systemctl daemon-reload
-            systemctl enable --now caddy
 
             echo "=== Pre-warming compilation cache ==="
             mkdir -p /var/tmp/adk-playground-workspace/src
@@ -339,6 +338,7 @@ Resources:
             cargo build 2>&1 || true
             echo "=== Setup Complete $(date) ==="
 
+  # --- ASG (on-demand, single instance) ---
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -358,8 +358,10 @@ Resources:
 
 Outputs:
   PlaygroundURL:
-    Value: !Sub 'http://${ElasticIP}'
+    Value: !Sub 'https://${DomainName}'
+  CloudFrontDomain:
+    Value: !GetAtt CloudFrontDistribution.DomainName
   ElasticIP:
     Value: !Ref ElasticIP
-  CostEstimate:
-    Value: 'On-demand t4g.medium ~$24/mo + EBS $1.60/mo = ~$26/mo total'
+  CertificateArn:
+    Value: !Ref Certificate

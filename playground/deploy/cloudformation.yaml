@@ -63,7 +63,11 @@ Resources:
       GroupDescription: ADK Playground
       VpcId: !Ref VpcId
       SecurityGroupIngress:
-        - {IpProtocol: tcp, FromPort: 8080, ToPort: 8080, CidrIp: 0.0.0.0/0}
+        # Only CloudFront can reach the backend
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourcePrefixListId: pl-3b927c52  # com.amazonaws.global.cloudfront.origin-facing
         - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
 
   ElasticIP:

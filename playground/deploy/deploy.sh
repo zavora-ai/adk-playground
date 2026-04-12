@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# ADK-Rust Playground — Deploy to AWS Spot Instance
+# ADK-Rust Playground — Deploy to AWS (on-demand ARM Graviton)
 # Prerequisites: AWS CLI configured, GOOGLE_API_KEY set
 #
 # Usage:
@@ -13,7 +13,6 @@ set -euo pipefail
 STACK_NAME="adk-playground"
 REGION="${AWS_REGION:-us-east-1}"
 INSTANCE_TYPE="t4g.medium"
-SPOT_MAX_PRICE="0.025"
 DOMAIN=""
 KEY_PAIR=""
 REPO="https://github.com/zavora-ai/adk-playground.git"
@@ -46,24 +45,10 @@ echo "║   ADK-Rust Playground — AWS Deployment   ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 echo "  Region:    ${REGION}"
-echo "  Instance:  ${INSTANCE_TYPE} (ARM Graviton)"
-echo "  Spot bid:  \$${SPOT_MAX_PRICE}/hr"
+echo "  Instance:  ${INSTANCE_TYPE} (ARM Graviton, on-demand)"
 echo "  Domain:    ${DOMAIN:-none (HTTP on IP)}"
 echo ""
-
-# Show current spot prices
-echo "Current spot prices for ${INSTANCE_TYPE} in ${REGION}:"
-aws ec2 describe-spot-price-history \
-  --region "$REGION" \
-  --instance-types "$INSTANCE_TYPE" \
-  --product-descriptions "Linux/UNIX" \
-  --start-time "$(date -u +%Y-%m-%dT%H:%M:%S)" \
-  --query 'SpotPriceHistory[*].[AvailabilityZone,SpotPrice]' \
-  --output table 2>/dev/null || echo "  (couldn't fetch — check AWS CLI config)"
-echo ""
-
-echo "Estimated monthly cost: ~\$12-14 (spot + EBS)"
-echo "vs On-demand: ~\$26/mo"
+echo "Estimated monthly cost: ~\$26 (on-demand + EBS)"
 echo ""
 
 read -p "Deploy? (y/N) " -n 1 -r
@@ -87,7 +72,6 @@ aws cloudformation deploy \
     MistralApiKey="${MISTRAL_API_KEY:-}" \
     XAIApiKey="${XAI_API_KEY:-}" \
     OpenRouterApiKey="${OPENROUTER_API_KEY:-}" \
-    SpotMaxPrice="$SPOT_MAX_PRICE" \
     InstanceType="$INSTANCE_TYPE" \
     DomainName="$DOMAIN" \
     KeyPairName="$KEY_PAIR" \
@@ -105,7 +89,7 @@ aws cloudformation describe-stacks \
 echo ""
 echo "The instance is booting and compiling (~10-15 min for first setup)."
 echo "Check progress:"
-echo "  ssh ec2-user@<IP> 'tail -f /var/log/adk-playground-setup.log'"
+echo "  ssh ec2-user@<IP> 'tail -f /var/log/adk-setup.log'"
 echo ""
 echo "Tear down:"
 echo "  ./deploy.sh --destroy"

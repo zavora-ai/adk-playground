@@ -37,10 +37,6 @@ Parameters:
     NoEcho: true
     Default: ''
 
-  SpotMaxPrice:
-    Type: String
-    Default: '0.025'
-
   InstanceType:
     Type: String
     Default: t4g.medium
@@ -350,20 +346,9 @@ Resources:
       MaxSize: '1'
       DesiredCapacity: '1'
       VPCZoneIdentifier: !Ref SubnetIds
-      MixedInstancesPolicy:
-        InstancesDistribution:
-          OnDemandBaseCapacity: 0
-          OnDemandPercentageAboveBaseCapacity: 0
-          SpotAllocationStrategy: price-capacity-optimized
-          SpotMaxPrice: !Ref SpotMaxPrice
-        LaunchTemplate:
-          LaunchTemplateSpecification:
-            LaunchTemplateId: !Ref LaunchTemplate
-            Version: !GetAtt LaunchTemplate.LatestVersionNumber
-          Overrides:
-            - InstanceType: t4g.medium
-            - InstanceType: t4g.small
-            - InstanceType: t4g.large
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
       HealthCheckType: EC2
       HealthCheckGracePeriod: 900
       Tags:
@@ -377,4 +362,4 @@ Outputs:
   ElasticIP:
     Value: !Ref ElasticIP
   CostEstimate:
-    Value: 'Spot ~$10-12/mo + EBS $1.60/mo = ~$12-14/mo total'
+    Value: 'On-demand t4g.medium ~$24/mo + EBS $1.60/mo = ~$26/mo total'

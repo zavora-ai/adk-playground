@@ -3,9 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches: [main]
-    paths:
-      - 'playground/**'
-      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -16,7 +14,6 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
-          # API keys to write to .env on the server
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -31,8 +28,8 @@ jobs:
             --query 'Reservations[].Instances[0].InstanceId' --output text)
 
           if [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
-            echo "No running instance found — ASG will pick up changes on next boot"
-            exit 0
+            echo "No running instance found"
+            exit 1
           fi
 
           echo "Deploying to $INSTANCE_ID..."
@@ -46,7 +43,6 @@ jobs:
           [ -n "$MISTRAL_API_KEY" ]   && ENV_CONTENT="${ENV_CONTENT}MISTRAL_API_KEY=${MISTRAL_API_KEY}\n"
           [ -n "$XAI_API_KEY" ]       && ENV_CONTENT="${ENV_CONTENT}XAI_API_KEY=${XAI_API_KEY}\n"
           [ -n "$OPENROUTER_API_KEY" ] && ENV_CONTENT="${ENV_CONTENT}OPENROUTER_API_KEY=${OPENROUTER_API_KEY}\n"
-          # DB connection strings for the Docker containers
           ENV_CONTENT="${ENV_CONTENT}POSTGRES_URL=postgres://adk:adk_playground@localhost:5433/adk_sessions\n"
           ENV_CONTENT="${ENV_CONTENT}MONGODB_URL=mongodb://adk:adk_playground@localhost:27017\n"
           ENV_CONTENT="${ENV_CONTENT}NEO4J_URL=bolt://localhost:7687\n"

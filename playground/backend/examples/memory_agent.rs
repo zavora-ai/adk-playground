@@ -32,7 +32,7 @@ async fn recall_memory(args: RecallArgs) -> adk_tool::Result<serde_json::Value> 
             user_id: "user".into(),
             app_name: "playground".into(),
             limit: Some(5),
-            min_score: None,
+            min_score: None, project_id: None,
         })
         .await
     {
@@ -136,6 +136,8 @@ async fn main() -> anyhow::Result<()> {
         cache_capable: None,
         request_context: None,
         cancellation_token: None,
+        intra_compaction_config: None,
+        intra_compaction_summarizer: None,
     })?;
 
     let query = "I need help with error handling in my project. What approach would suit me best?";

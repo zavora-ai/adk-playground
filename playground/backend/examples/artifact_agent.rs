@@ -155,6 +155,8 @@ async fn main() -> anyhow::Result<()> {
         cache_capable: None,
         request_context: None,
         cancellation_token: None,
+        intra_compaction_config: None,
+        intra_compaction_summarizer: None,
     })?;
 
     let query = "Write a short haiku about Rust programming and save it as poem.txt";

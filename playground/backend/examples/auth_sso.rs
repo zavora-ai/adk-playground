@@ -292,6 +292,8 @@ async fn main() -> anyhow::Result<()> {
         cache_capable: None,
         request_context: None,
         cancellation_token: None,
+        intra_compaction_config: None,
+        intra_compaction_summarizer: None,
     })?;
 
     let query = "Search for revenue data, deploy the analytics service to staging, and reset all user passwords.";

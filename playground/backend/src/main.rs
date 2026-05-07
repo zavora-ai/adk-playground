@@ -994,35 +994,35 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-adk-rust = { version = "0.5.0", default-features = false, features = ["full", "openai", "anthropic", "deepseek", "bedrock", "azure-ai", "openrouter", "postgres-session", "mongodb-session", "neo4j-session"] }
-adk-tool = "0.5.0"
-adk-audio = { version = "0.5.0", default-features = false, features = ["tts"] }
-adk-realtime = { version = "0.5.0", default-features = false, features = ["openai", "gemini"] }
-adk-skill = "0.5.0"
-adk-plugin = "0.5.0"
-adk-code = "0.5.0"
-adk-sandbox = "0.5.0"
-adk-rag = "0.5.0"
-adk-core = "0.5.0"
-adk-model = "0.5.0"
-adk-agent = { version = "0.5.0", features = ["guardrails"] }
-adk-session = { version = "0.5.0", features = ["encrypted-session"] }
-adk-graph = "0.5.0"
-adk-anthropic = "0.5.0"
-adk-artifact = "0.5.0"
-adk-cli = "0.5.0"
-adk-guardrail = "0.5.0"
-adk-memory = "0.5.0"
-adk-auth = { version = "0.5.0", features = ["sso"] }
-adk-payments = { version = "0.5.0", features = ["acp"] }
-adk-action = "0.5.0"
-adk-telemetry = "0.5.0"
+adk-rust = { version = "0.8.0", default-features = false, features = ["full", "openai", "anthropic", "deepseek", "bedrock", "azure-ai", "openrouter", "postgres-session", "mongodb-session", "neo4j-session"] }
+adk-tool = { version = "0.8.0", features = ["mcp"] }
+adk-audio = { version = "0.8.0", default-features = false, features = ["tts"] }
+adk-realtime = { version = "0.8.0", default-features = false, features = ["openai", "gemini"] }
+adk-skill = "0.8.0"
+adk-plugin = "0.8.0"
+adk-code = "0.8.0"
+adk-sandbox = "0.8.0"
+adk-rag = "0.8.0"
+adk-core = "0.8.0"
+adk-model = "0.8.0"
+adk-agent = { version = "0.8.0", features = ["guardrails"] }
+adk-session = { version = "0.8.0", features = ["encrypted-session"] }
+adk-graph = "0.8.0"
+adk-anthropic = "0.8.0"
+adk-artifact = "0.8.0"
+adk-cli = "0.8.0"
+adk-guardrail = "0.8.0"
+adk-memory = "0.8.0"
+adk-auth = { version = "0.8.0", features = ["sso"] }
+adk-payments = { version = "0.8.0", features = ["acp"] }
+adk-action = "0.8.0"
+adk-telemetry = "0.8.0"
 chrono = { version = "0.4", features = ["serde"] }
 rustls = { version = "0.23", features = ["ring"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-schemars = "0.8"
+schemars = "1"
 async-trait = "0.1"
 anyhow = "1"
 dotenvy = "0.15"

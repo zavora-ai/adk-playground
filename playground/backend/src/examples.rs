@@ -479,6 +479,42 @@ const REGISTRY: &[ExampleMeta] = &[
         description: "ToolSearchConfig regex filtering — hide dangerous tools from the LLM while keeping them registered",
         file: "competitive_tool_search.rs",
     },
+    // ── v0.7 / v0.8 Features ──
+    ExampleMeta {
+        id: "deepseek_v4_thinking",
+        name: "DeepSeek V4 Thinking",
+        category: "v0.7+ Features",
+        description: "ThinkingMode, ReasoningEffort, strict tool mode — V4 Flash/Pro with visible chain-of-thought",
+        file: "deepseek_v4_thinking.rs",
+    },
+    ExampleMeta {
+        id: "project_scoped_memory",
+        name: "Project-Scoped Memory",
+        category: "v0.7+ Features",
+        description: "project_id dimension isolates memories per project — same user, different projects, zero leakage",
+        file: "project_scoped_memory.rs",
+    },
+    ExampleMeta {
+        id: "bounded_execution",
+        name: "Bounded Execution",
+        category: "v0.7+ Features",
+        description: "RunConfig with history_max_events and max_tool_concurrency — production safety bounds for agents",
+        file: "bounded_execution.rs",
+    },
+    ExampleMeta {
+        id: "awp_discovery",
+        name: "AWP Agent Discovery",
+        category: "v0.7+ Features",
+        description: "Agentic Web Protocol — capability manifests, trust levels, rate limits, and agent-to-agent discovery",
+        file: "awp_discovery.rs",
+    },
+    ExampleMeta {
+        id: "minimal_agent",
+        name: "Minimal Tier Agent",
+        category: "v0.7+ Features",
+        description: "Lightest possible agent using v0.8 minimal feature tier — 32% smaller builds, ~50s compile",
+        file: "minimal_agent.rs",
+    },
     // ── Anthropic Features ──
     ExampleMeta {
         id: "anthropic_caching",

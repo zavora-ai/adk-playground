@@ -128,6 +128,8 @@ async fn main() -> anyhow::Result<()> {
         cache_capable: None,
         request_context: None,
         cancellation_token: None,
+        intra_compaction_config: None,
+        intra_compaction_summarizer: None,
     })?;
 
     println!("🌍 Mistral Medium — Multilingual Tools\n");

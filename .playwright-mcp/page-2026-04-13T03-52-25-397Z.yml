@@ -1,0 +1,58 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - heading "⚡ ADK-Rust Playground" [level=1] [ref=e6]
+      - generic [ref=e7]: Rust Agent Development Kit
+      - 'generic "Backend: checking" [ref=e8]'
+    - generic [ref=e9]:
+      - button "System" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+        - generic [ref=e13]: System
+      - link "Star on GitHub" [ref=e14] [cursor=pointer]:
+        - /url: https://github.com/zavora-ai/adk-rust
+        - img [ref=e15]
+        - img [ref=e18]
+        - text: Star on GitHub
+      - generic [ref=e20]:
+        - img [ref=e21]
+        - text: ⌘+Enter
+      - button "Run" [disabled] [ref=e23]:
+        - img [ref=e24]
+        - text: Run
+  - generic [ref=e26]:
+    - img [ref=e27]
+    - generic [ref=e29]:
+      - text: Help keep ADK-Rust free and growing.
+      - link "Become a Gold Sponsor" [ref=e30] [cursor=pointer]:
+        - /url: https://github.com/sponsors/zavora-ai
+      - text: — $100/mo gets your logo on the ADK-Rust website & GitHub page, plus a copy of the Official ADK-Rust Blueprint book.
+    - button "Dismiss" [ref=e31] [cursor=pointer]:
+      - img [ref=e32]
+  - generic [ref=e35]:
+    - complementary [ref=e36]:
+      - generic [ref=e37]:
+        - img [ref=e38]
+        - generic [ref=e40]: Examples
+        - generic [ref=e41]: "0"
+        - button "Close" [ref=e42] [cursor=pointer]:
+          - img [ref=e43]
+    - generic [ref=e46]:
+      - generic [ref=e47]:
+        - button "Toggle examples" [ref=e48] [cursor=pointer]:
+          - img [ref=e49]
+        - generic [ref=e51]: main.rs
+        - generic [ref=e52]: Custom
+      - generic [ref=e54]: Loading editor...
+    - generic [ref=e55]:
+      - generic [ref=e56]:
+        - button "Output" [ref=e57] [cursor=pointer]:
+          - img [ref=e58]
+          - text: Output
+        - button "Trace" [ref=e60] [cursor=pointer]:
+          - img [ref=e61]
+          - text: Trace
+      - generic [ref=e64]:
+        - text: Click
+        - strong [ref=e65]: Run
+        - text: or press
+        - strong [ref=e66]: ⌘+Enter

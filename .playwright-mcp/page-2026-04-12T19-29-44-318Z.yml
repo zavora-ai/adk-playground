@@ -1,0 +1,66 @@
+- generic [ref=e1]:
+  - main [ref=e4]:
+    - generic [ref=e6]:
+      - generic [ref=e8]:
+        - button "Provide feedback" [ref=e11] [cursor=pointer]
+        - button "Multi-session disabled" [ref=e18] [cursor=pointer]:
+          - text: Multi-session disabled
+          - generic [ref=e19]:
+            - img
+        - button "Language English" [ref=e26] [cursor=pointer]:
+          - text: English
+          - generic [ref=e27]:
+            - img
+      - link "Amazon Web Services logo" [ref=e30] [cursor=pointer]:
+        - /url: https://aws.amazon.com/
+        - img "Amazon Web Services logo" [ref=e31]
+    - generic [ref=e34]:
+      - generic [ref=e39]:
+        - generic [ref=e42]:
+          - heading "Sign In" [level=2] [ref=e47]
+          - generic [ref=e49]:
+            - generic [ref=e50]:
+              - paragraph [ref=e51]: Access your AWS account by user type.
+              - text: User type
+              - button "(not sure?)" [ref=e54] [cursor=pointer]:
+                - button "(not sure?)" [ref=e55]
+            - radiogroup "User type selection" [ref=e57]:
+              - generic [ref=e58]:
+                - generic [ref=e62]:
+                  - generic [ref=e63]:
+                    - img [ref=e64]
+                    - radio "Root user" [checked] [ref=e67]
+                  - generic [ref=e68]:
+                    - generic [ref=e69]: Root user
+                    - generic [ref=e70]: Account owner that performs tasks requiring unrestricted access.
+                - generic [ref=e74]:
+                  - generic [ref=e75]:
+                    - img [ref=e76]
+                    - radio "IAM user" [ref=e79]
+                  - generic [ref=e80]:
+                    - generic [ref=e81]: IAM user
+                    - generic [ref=e82]: User within an account that performs daily tasks.
+            - generic [ref=e84]:
+              - generic [ref=e85]: Email address
+              - textbox "Email address" [active] [ref=e90]:
+                - /placeholder: username@example.com
+            - generic [ref=e91]:
+              - button "Next" [ref=e93] [cursor=pointer]
+              - strong [ref=e96]: OR
+              - button "New to AWS? Sign up" [ref=e98] [cursor=pointer]
+        - generic [ref=e100]:
+          - text: By continuing, you agree to
+          - link "AWS Customer Agreement" [ref=e101]:
+            - /url: https://aws.amazon.com/terms
+          - text: or other agreement for AWS services, and the
+          - link "Privacy Notice" [ref=e102]:
+            - /url: https://aws.amazon.com/privacy
+          - text: . This site uses essential cookies. See our
+          - link "Cookie Notice" [ref=e103]:
+            - /url: https://aws.amazon.com/legal/cookies
+          - text: for more information.
+      - link "Amazon Web Services Marketing" [ref=e106]:
+        - /url: https://aws.amazon.com/sustainability/tools/console/?sc_icampaign=launch_aws-sustainability-console_2026&sc_ichannel=ha&sc_iplace=signin&trk=ca16fdd3-1ea7-4c0d-ac71-28507652bb63
+        - img "Amazon Web Services Marketing" [ref=e107]
+    - generic [ref=e109]: © 2026 Amazon Web Services, Inc. or its affiliates. All rights reserved.
+  - alert [ref=e110]

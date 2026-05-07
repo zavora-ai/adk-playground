@@ -113,6 +113,8 @@ async fn main() -> anyhow::Result<()> {
         cache_capable: None,
         request_context: None,
         cancellation_token: None,
+        intra_compaction_config: None,
+        intra_compaction_summarizer: None,
     })?;
 
     let message = Content::new("user")
@@ -186,6 +188,8 @@ async fn main() -> anyhow::Result<()> {
         cache_capable: None,
         request_context: None,
         cancellation_token: None,
+        intra_compaction_config: None,
+        intra_compaction_summarizer: None,
     })?;
 
     println!("Fallback chain: [{model_name}, google/gemma-3-4b-it:free]");

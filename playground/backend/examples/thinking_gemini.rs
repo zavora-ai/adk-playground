@@ -96,8 +96,8 @@ async fn main() -> anyhow::Result<()> {
     )
     .with_parameters_schema::<ConvertArgs>();
 
-    // Gemini 2.5 Flash — thinking is built-in, no special config needed
-    let model = Arc::new(GeminiModel::new(&api_key, "gemini-2.5-flash")?);
+    // Gemini 3.1 Flash Lite — thinking is built-in, no special config needed
+    let model = Arc::new(GeminiModel::new(&api_key, "gemini-3.1-flash-lite-preview")?);
 
     let agent = Arc::new(
         LlmAgentBuilder::new("math_thinker")

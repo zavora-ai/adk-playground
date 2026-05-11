@@ -76,7 +76,7 @@ aws cloudformation deploy \
     DomainName="$DOMAIN" \
     KeyPairName="$KEY_PAIR" \
     GitHubRepo="$REPO" \
-  --tags Key=Project,Value=adk-playground
+  --tags Project=adk-playground
 
 echo ""
 echo "=== Deployed ==="

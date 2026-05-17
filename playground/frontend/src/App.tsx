@@ -1241,7 +1241,7 @@ function App() {
             >
               Become a Gold Sponsor
             </a>
-            — $100/mo gets your logo on the ADK-Rust website & GitHub page, plus a copy of the Official ADK-Rust Blueprint book.
+            — $50/mo gets your logo on the ADK-Rust website & GitHub page, plus a copy of the Official ADK-Rust Blueprint book.
           </span>
           <button
             className="sponsor-dismiss"

@@ -1106,7 +1106,13 @@ function App() {
       .then(r => r.json())
       .then((data: Example[]) => {
         setExamples(data);
-        if (data.length > 0) {
+        // Deep link: select example from URL hash (e.g., #quickstart)
+        const hashId = window.location.hash.replace('#', '');
+        const target = hashId ? data.find(e => e.id === hashId) : null;
+        if (target) {
+          setCode(target.code);
+          setSelectedId(target.id);
+        } else if (data.length > 0) {
           setCode(data[0].code);
           setSelectedId(data[0].id);
         }
@@ -1127,6 +1133,23 @@ function App() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Handle browser back/forward with hash changes
+  useEffect(() => {
+    const onHashChange = () => {
+      const hashId = window.location.hash.replace('#', '');
+      if (hashId && hashId !== selectedId) {
+        const target = examples.find(e => e.id === hashId);
+        if (target) {
+          setCode(target.code);
+          setSelectedId(target.id);
+          setResult(null);
+        }
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [examples, selectedId]);
+
   const handleEditorMount: OnMount = (editor, monaco) => {
     editor.addAction({
       id: 'run-code',
@@ -1140,6 +1163,8 @@ function App() {
     setCode(ex.code);
     setSelectedId(ex.id);
     setResult(null);
+    // Update URL hash for deep linking
+    window.history.replaceState(null, '', `#${ex.id}`);
     // Close sidebar on mobile after selection
     if (window.innerWidth <= 900) setSidebarOpen(false);
   };

@@ -8,21 +8,33 @@ body:
       value: |
         Thanks for suggesting a new example! This helps us prioritize what to build next for the ADK-Rust Playground.
 
+        Browse existing examples at [playground.adk-rust.com](https://playground.adk-rust.com) — 78 examples across 21 categories.
+
   - type: dropdown
     id: category
     attributes:
       label: Category
       description: Which area does this example fall under?
       options:
-        - Agents (LLM Agent, Graph Agent, Multi-Agent)
-        - Workflows (Sequential, Parallel, Conditional)
-        - Tools (Function Tools, MCP, Code Execution)
-        - Models (OpenAI, Anthropic, Gemini, DeepSeek, Groq, xAI, etc.)
+        - Getting Started
+        - Function Tools
+        - Agents (LLM Agent, Multi-Agent, Agent-as-Tool)
+        - Workflows (Sequential, Parallel, Loop)
+        - Graph (Conditional, ReAct, Supervisor)
+        - Sessions & State
+        - Model Providers (OpenAI, Anthropic, Gemini, DeepSeek, xAI, Mistral, Bedrock, etc.)
+        - Audio (TTS, Realtime Voice, Gemini Live)
         - Thinking / Reasoning (Chain-of-thought, Extended thinking)
-        - Streaming (SSE, Real-time, Audio)
-        - Memory & Sessions
-        - Artifacts (Files, Images, PDFs)
-        - Deployment (A2A, REST API)
+        - Extensions (Skills, Plugins)
+        - Coding (Sandbox, CLI)
+        - RAG (Retrieval-Augmented Generation)
+        - Security (Auth, RBAC, SSO, Audit)
+        - Built-in Tools (Google Search, Web Search)
+        - Payments (Checkout, Guardrails)
+        - Action Nodes (SET, TRANSFORM, SWITCH)
+        - Competitive (Encryption, Graph Resume, Tool Search)
+        - Anthropic Features (Caching, Vision, Streaming)
+        - v0.7+ Features (AWP, DeepSeek V4, Bounded Execution, Project Memory)
         - Callbacks & Guardrails
         - Other
     validations:
@@ -58,13 +70,15 @@ body:
       description: Does this example require a specific provider?
       options:
         - Any / Not specific
-        - OpenAI (GPT-4o, o3, o4-mini)
-        - Anthropic (Claude Sonnet, Haiku)
-        - Google (Gemini Flash, Pro)
-        - DeepSeek (Chat, Reasoner)
-        - xAI (Grok)
-        - Groq (Llama, Mixtral)
-        - Mistral
+        - Google (Gemini 3.1 Flash, Pro)
+        - OpenAI (GPT-4.1, o4-mini, GPT-5)
+        - Anthropic (Claude Sonnet 4, Haiku)
+        - DeepSeek (V4 Flash, V4 Pro)
+        - xAI (Grok-3, Grok-3-mini)
+        - Mistral (Medium, Large, Small)
+        - AWS Bedrock
+        - Azure AI
+        - OpenRouter
         - Ollama (Local)
         - Multiple providers
     validations:

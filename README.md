@@ -249,7 +249,7 @@ OPENROUTER_API_KEY=...
 
 ## Request an example
 
-Want to see a specific example? [Open an issue](https://github.com/zavora-ai/adk-rust/issues/new?template=example_request.yml) using the Example Request template.
+Want to see a specific example? [Open an issue](https://github.com/zavora-ai/adk-playground/issues/new?template=example_request.yml) using the Example Request template.
 
 ## License
 

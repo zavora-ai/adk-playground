@@ -8,12 +8,12 @@ The fastest way to explore ADK-Rust — no setup required:
 
 👉 **[playground.adk-rust.com](https://playground.adk-rust.com)**
 
-78 curated examples across 21 categories: agents, tools, thinking/reasoning, workflows, sessions, RAG, payments, multi-agent systems, and more. Mobile friendly.
+81 curated examples across 22 categories: agents, tools, thinking/reasoning, workflows, sessions, RAG, payments, multi-agent systems, and more. Mobile friendly.
 
 | | |
 |---|---|
 | ![Editor](docs/screenshots/playground-editor.png) | ![Output](docs/screenshots/playground-output.png) |
-| Code editor with 78 examples across 21 categories | Streaming output with model, tokens, and cost |
+| Code editor with 81 examples across 22 categories | Streaming output with model, tokens, and cost |
 | ![Trace](docs/screenshots/playground-trace.png) | ![Light](docs/screenshots/playground-light.png) |
 | Execution traces with LLM usage breakdown | Light and dark theme support |
 
@@ -226,6 +226,14 @@ Every example links directly to the live playground. Click to open.
 | [Bounded Execution](https://playground.adk-rust.com/#bounded_execution) | RunConfig with history_max_events and max_tool_concurrency |
 | [AWP Agent Discovery](https://playground.adk-rust.com/#awp_discovery) | Agentic Web Protocol — capability manifests, trust levels, rate limits |
 | [Minimal Tier Agent](https://playground.adk-rust.com/#minimal_agent) | adk_rust::run() one-liner — 32% smaller builds with v0.8 minimal tier |
+
+### v0.8+ Features
+
+| Example | Description |
+|---------|-------------|
+| [Schema Normalization](https://playground.adk-rust.com/#schema_normalization) | Provider-aware MCP schema transforms — Gemini, OpenAI, Anthropic normalize differently (no API keys) |
+| [ACP Server](https://playground.adk-rust.com/#acp_server) | Expose ADK agents via Agent Client Protocol — IDE connections (Kiro, VS Code, Claude Code) |
+| [Retry & Reflect](https://playground.adk-rust.com/#retry_reflect) | Plugin handles tool failures with exponential backoff and reflection prompts |
 
 ## Environment variables
 

@@ -515,6 +515,28 @@ const REGISTRY: &[ExampleMeta] = &[
         description: "Lightest possible agent using v0.8 minimal feature tier — 32% smaller builds, ~50s compile",
         file: "minimal_agent.rs",
     },
+    // ── v0.8.1 / v0.8.2 Features ──
+    ExampleMeta {
+        id: "schema_normalization",
+        name: "Schema Normalization",
+        category: "v0.8+ Features",
+        description: "Provider-aware MCP schema transforms — Gemini, OpenAI, Anthropic each normalize differently (no API keys)",
+        file: "schema_normalization.rs",
+    },
+    ExampleMeta {
+        id: "acp_server",
+        name: "ACP Server",
+        category: "v0.8+ Features",
+        description: "Expose ADK agents via Agent Client Protocol — IDE connections (Kiro, VS Code, Claude Code)",
+        file: "acp_server.rs",
+    },
+    ExampleMeta {
+        id: "retry_reflect",
+        name: "Retry & Reflect",
+        category: "v0.8+ Features",
+        description: "Plugin handles tool failures with exponential backoff and reflection prompts for self-correction",
+        file: "retry_reflect.rs",
+    },
     // ── Anthropic Features ──
     ExampleMeta {
         id: "anthropic_caching",

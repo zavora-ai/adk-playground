@@ -85,14 +85,12 @@ async fn main() -> anyhow::Result<()> {
     let run_config = RunConfig {
         // Only load the last 20 events into context (prevents unbounded growth)
         history_max_events: Some(20),
-        // Allow at most 2 tools to run in parallel (prevents API overload)
-        max_tool_concurrency: Some(2),
         ..Default::default()
     };
 
     println!("  ⚙️  RunConfig:");
     println!("     history_max_events: 20 (older events trimmed from context)");
-    println!("     max_tool_concurrency: 2 (at most 2 tools run simultaneously)");
+    println!("     tool_concurrency: default (use ToolConcurrencyConfig for limits)");
     println!();
     println!("  Why this matters:");
     println!("     • Long conversations accumulate thousands of events");
@@ -175,7 +173,8 @@ async fn main() -> anyhow::Result<()> {
 
     println!("\n\n=== Key Features ===");
     println!("• RunConfig::history_max_events — cap context window growth");
-    println!("• RunConfig::max_tool_concurrency — limit parallel tool execution");
+    println!("• RunConfig::tool_concurrency — control parallel tool execution");
+    println!("• ToolConcurrencyConfig — max_concurrent, per-tool overrides, backpressure");
     println!("• Prevents runaway costs from unbounded history accumulation");
     println!("• Protects downstream APIs from concurrent request floods");
     println!("• Essential for production agents with cost/latency SLAs");

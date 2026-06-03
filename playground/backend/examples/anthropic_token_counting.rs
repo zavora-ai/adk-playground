@@ -25,23 +25,13 @@ async fn main() -> anyhow::Result<()> {
     // ── Part 1: Model Discovery ──
     println!("=== Part 1: Model Discovery ===\n");
 
-    let models = client.list_models().await?;
-    println!("📋 Available Claude models ({} total):", models.len());
-    for m in models.iter().take(8) {
-        println!("   {} — {}", m.id, m.display_name);
-    }
-    if models.len() > 8 {
-        println!("   ... and {} more", models.len() - 8);
-    }
-
-    println!("\n📌 Active model details:");
+    println!("📌 Active model: {}", model_name);
     match client.get_model(model_name).await {
         Ok(info) => {
             println!("   ID:      {}", info.id);
-            println!("   Name:    {}", info.display_name);
             println!("   Created: {}", info.created_at);
         }
-        Err(e) => println!("   Could not fetch: {e}"),
+        Err(e) => println!("   (API call skipped or unavailable: {e})"),
     }
 
     // ── Part 2: Token Counting (pre-flight) ──

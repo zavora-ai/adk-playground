@@ -994,29 +994,30 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-adk-rust = { version = "0.8.2", default-features = false, features = ["full", "openai", "anthropic", "deepseek", "bedrock", "azure-ai", "openrouter", "postgres-session", "mongodb-session", "neo4j-session"] }
-adk-tool = { version = "0.8.2", features = ["mcp"] }
-adk-audio = { version = "0.8.2", default-features = false, features = ["tts"] }
-adk-realtime = { version = "0.8.2", default-features = false, features = ["openai", "gemini"] }
-adk-skill = "0.8.2"
-adk-plugin = "0.8.2"
-adk-code = "0.8.2"
-adk-sandbox = "0.8.2"
-adk-rag = "0.8.2"
-adk-core = "0.8.2"
-adk-model = "0.8.2"
-adk-agent = { version = "0.8.2", features = ["guardrails"] }
-adk-session = { version = "0.8.2", features = ["encrypted-session"] }
-adk-graph = "0.8.2"
-adk-anthropic = "0.8.2"
-adk-artifact = "0.8.2"
-adk-cli = "0.8.2"
-adk-guardrail = "0.8.2"
-adk-memory = "0.8.2"
-adk-auth = { version = "0.8.2", features = ["sso"] }
-adk-payments = { version = "0.8.2", features = ["acp"] }
-adk-action = "0.8.2"
-adk-telemetry = "0.8.2"
+adk-rust = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-rust", default-features = false, features = ["full", "openai", "anthropic", "deepseek", "bedrock", "azure-ai", "openrouter", "postgres-session", "mongodb-session", "neo4j-session"] }
+adk-tool = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-tool", features = ["mcp"] }
+adk-audio = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-audio", default-features = false, features = ["tts"] }
+adk-realtime = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-realtime", default-features = false, features = ["openai", "gemini"] }
+adk-skill = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-skill" }
+adk-plugin = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-plugin" }
+adk-code = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-code" }
+adk-sandbox = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-sandbox" }
+adk-rag = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-rag" }
+adk-core = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-core" }
+adk-model = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-model" }
+adk-agent = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-agent", features = ["guardrails"] }
+adk-session = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-session", features = ["encrypted-session"] }
+adk-graph = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-graph" }
+adk-anthropic = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-anthropic" }
+adk-artifact = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-artifact" }
+adk-cli = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-cli" }
+adk-guardrail = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-guardrail" }
+adk-memory = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-memory" }
+adk-auth = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-auth", features = ["sso"] }
+adk-payments = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-payments", features = ["acp"] }
+adk-action = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-action" }
+adk-telemetry = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-telemetry" }
+adk-gemini = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-gemini" }
 chrono = { version = "0.4", features = ["serde"] }
 rustls = { version = "0.23", features = ["ring"] }
 tokio = { version = "1", features = ["full"] }

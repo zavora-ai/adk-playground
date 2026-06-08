@@ -994,30 +994,35 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-adk-rust = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-rust", default-features = false, features = ["full", "openai", "anthropic", "deepseek", "bedrock", "azure-ai", "openrouter", "postgres-session", "mongodb-session", "neo4j-session"] }
-adk-tool = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-tool", features = ["mcp"] }
-adk-audio = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-audio", default-features = false, features = ["tts"] }
-adk-realtime = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-realtime", default-features = false, features = ["openai", "gemini"] }
-adk-skill = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-skill" }
-adk-plugin = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-plugin" }
-adk-code = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-code" }
-adk-sandbox = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-sandbox" }
-adk-rag = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-rag" }
-adk-core = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-core" }
-adk-model = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-model" }
-adk-agent = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-agent", features = ["guardrails"] }
-adk-session = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-session", features = ["encrypted-session"] }
-adk-graph = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-graph" }
-adk-anthropic = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-anthropic" }
-adk-artifact = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-artifact" }
-adk-cli = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-cli" }
-adk-guardrail = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-guardrail" }
-adk-memory = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-memory" }
-adk-auth = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-auth", features = ["sso"] }
-adk-payments = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-payments", features = ["acp"] }
-adk-action = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-action" }
-adk-telemetry = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-telemetry" }
-adk-gemini = { path = "/Users/jameskaranja/Developer/projects/adk-rust/adk-gemini" }
+adk-rust = { version = "1.0.0", default-features = false, features = ["full", "openai", "anthropic", "deepseek", "bedrock", "azure-ai", "openrouter", "postgres-session", "mongodb-session", "neo4j-session"] }
+adk-tool = { version = "1.0.0", features = ["mcp"] }
+adk-audio = { version = "1.0.0", default-features = false, features = ["tts"] }
+adk-realtime = { version = "1.0.0", default-features = false, features = ["openai", "gemini"] }
+adk-skill = "1.0.0"
+adk-plugin = "1.0.0"
+adk-code = "1.0.0"
+adk-sandbox = "1.0.0"
+adk-rag = "1.0.0"
+adk-core = "1.0.0"
+adk-model = { version = "1.0.0", features = ["openai-conversations", "gemini-interactions"] }
+adk-agent = { version = "1.0.0", features = ["guardrails", "ambient"] }
+adk-session = { version = "1.0.0", features = ["encrypted-session"] }
+adk-graph = { version = "1.0.0", features = ["functional"] }
+adk-anthropic = { version = "1.0.0", features = ["managed-agents"] }
+adk-artifact = "1.0.0"
+adk-cli = "1.0.0"
+adk-guardrail = "1.0.0"
+adk-memory = "1.0.0"
+adk-auth = { version = "1.0.0", features = ["sso"] }
+adk-payments = { version = "1.0.0", features = ["acp"] }
+adk-action = "1.0.0"
+adk-telemetry = "1.0.0"
+adk-gemini = { version = "1.0.0", features = ["interactions"] }
+adk-runner = "1.0.0"
+adk-server = { version = "1.0.0", features = ["yaml-agent", "agent-registry", "a2a-interceptors", "background"] }
+adk-eval = { version = "1.0.0", features = ["personas", "statistics", "embedding", "junit"] }
+adk-enterprise = "1.0.0"
+adk-managed = "1.0.0"
 chrono = { version = "0.4", features = ["serde"] }
 rustls = { version = "0.23", features = ["ring"] }
 tokio = { version = "1", features = ["full"] }
@@ -1036,6 +1041,12 @@ tempfile = "3"
 serde_yaml = "0.9"
 regex = "1"
 sha2 = "0.10"
+futures = "0.3"
+tracing = "0.1"
+tokio-util = { version = "0.7", features = ["rt"] }
+blake3 = "1"
+axum = "0.8"
+reqwest = { version = "0.12", features = ["json"] }
 "#;
 
 fn hash_source(code: &str) -> u64 {
@@ -1103,7 +1114,7 @@ async fn prebuild_examples(state: &AppState, examples: &[examples::Example]) {
                 eprintln!(
                     "   ❌ {} build failed: {}",
                     ex.id,
-                    &stderr[..stderr.len().min(200)]
+                    &stderr[..stderr.len().min(800)]
                 );
             }
             Err(e) => {

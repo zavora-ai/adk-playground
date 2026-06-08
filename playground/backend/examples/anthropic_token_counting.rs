@@ -1,4 +1,4 @@
-use adk_core::{Content, Llm, LlmRequest, Part, SessionId, UserId};
+use adk_core::{Content, LlmRequest, SessionId, UserId};
 use adk_rust::futures::StreamExt;
 use adk_rust::prelude::*;
 use adk_rust::session::{CreateRequest, SessionService};
@@ -49,6 +49,7 @@ async fn main() -> anyhow::Result<()> {
         ],
         config: None,
         tools: HashMap::new(),
+        previous_response_id: None,
     };
 
     let count = client.count_tokens(&request).await?;

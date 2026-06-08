@@ -1020,7 +1020,7 @@ adk-telemetry = "1.0.0"
 adk-gemini = { version = "1.0.0", features = ["interactions"] }
 adk-runner = "1.0.0"
 adk-server = { version = "1.0.0", features = ["yaml-agent", "agent-registry", "a2a-interceptors", "background"] }
-adk-eval = { version = "1.0.0", features = ["personas", "statistics", "embedding"] }
+adk-eval = { version = "1.0.0", features = ["personas", "statistics", "embedding", "ci-helpers"] }
 adk-enterprise = "1.0.0"
 adk-managed = "1.0.0"
 chrono = { version = "0.4", features = ["serde"] }

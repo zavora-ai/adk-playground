@@ -890,6 +890,14 @@ const REGISTRY: &[ExampleMeta] = &[
         description: "Anthropic native tools — live agentic example matrix with server-side execution",
         file: "anthropic_server_tools.rs",
     },
+    // ── Eval ──
+    ExampleMeta {
+        id: "eval_showcase",
+        name: "Eval Showcase",
+        category: "Eval",
+        description: "Full eval framework — test cases, metrics, scoring, and reporting",
+        file: "eval_showcase.rs",
+    },
     // ── Sandbox ──
     ExampleMeta {
         id: "sandbox_agent",

@@ -351,7 +351,7 @@ async fn main() -> anyhow::Result<()> {
     let _ = STORE.set(Arc::new(Mutex::new(TxStore { current: None })));
 
     let api_key = std::env::var("GOOGLE_API_KEY")?;
-    let model = Arc::new(GeminiModel::new(&api_key, "gemini-3.1-flash-lite-preview")?);
+    let model = Arc::new(GeminiModel::new(&api_key, "gemini-3.7-flash")?);
 
     let agent = Arc::new(
         LlmAgentBuilder::new("checkout_agent")
@@ -389,22 +389,11 @@ async fn main() -> anyhow::Result<()> {
         })
         .await?;
 
-    let runner = Runner::new(RunnerConfig {
-        app_name: "playground".into(),
-        agent,
-        session_service: sessions,
-        artifact_service: None,
-        memory_service: None,
-        plugin_manager: None,
-        run_config: None,
-        compaction_config: None,
-        context_cache_config: None,
-        cache_capable: None,
-        request_context: None,
-        cancellation_token: None,
-        intra_compaction_config: None,
-        intra_compaction_summarizer: None,
-    })?;
+    let runner = Runner::builder()
+        .app_name("playground")
+        .agent(agent)
+        .session_service(sessions)
+        .build()?;
 
     let query = "I want to buy a Laptop Pro and 2 USB-C Hubs from TechStore. \
                  Ship them to me and pay with card.";

@@ -6,7 +6,8 @@ use adk_payments::domain::{
     TransactionState,
 };
 use adk_payments::guardrail::{
-    AmountThresholdGuardrail, MerchantAllowlistGuardrail, PaymentPolicySet,
+    AmountThresholdGuardrail, MerchantAllowlistGuardrail, PaymentOperation, PaymentPolicyContext,
+    PaymentPolicySet,
 };
 use adk_rust::futures::StreamExt;
 use adk_rust::prelude::*;
@@ -33,10 +34,11 @@ use std::sync::{Arc, Mutex};
 struct ShopState {
     cart_items: Vec<CartLine>,
     transactions: HashMap<String, TransactionRecord>,
-    policy_set: PaymentPolicySet,
 }
 
 static SHOP: std::sync::OnceLock<Arc<Mutex<ShopState>>> = std::sync::OnceLock::new();
+// Policies are evaluated asynchronously, so they live outside the shop's mutex.
+static POLICIES: std::sync::OnceLock<PaymentPolicySet> = std::sync::OnceLock::new();
 
 fn shop() -> std::result::Result<Arc<Mutex<ShopState>>, serde_json::Value> {
     SHOP.get()
@@ -160,23 +162,25 @@ async fn checkout(args: CheckoutArgs) -> adk_tool::Result<serde_json::Value> {
         Ok(b) => b,
         Err(e) => return Ok(e),
     };
-    let mut state = match lock_shop(&binding) {
-        Ok(g) => g,
-        Err(e) => return Ok(e),
+    // The shop lock is released before the policies are awaited.
+    let cart_items = {
+        let state = match lock_shop(&binding) {
+            Ok(g) => g,
+            Err(e) => return Ok(e),
+        };
+        if state.cart_items.is_empty() {
+            return Ok(serde_json::json!({ "error": "Cart is empty" }));
+        }
+        state.cart_items.clone()
     };
 
-    if state.cart_items.is_empty() {
-        return Ok(serde_json::json!({ "error": "Cart is empty" }));
-    }
-
-    let total: i64 = state
-        .cart_items
+    let total: i64 = cart_items
         .iter()
         .map(|l| l.total_price.amount_minor)
         .sum();
     let cart = Cart {
         cart_id: Some("cart-agent-1".to_string()),
-        lines: state.cart_items.clone(),
+        lines: cart_items.clone(),
         subtotal: Some(Money::new("USD", total, 2)),
         adjustments: Vec::new(),
         total: Money::new("USD", total, 2),
@@ -210,7 +214,18 @@ async fn checkout(args: CheckoutArgs) -> adk_tool::Result<serde_json::Value> {
 
     // Run payment guardrails
     let protocol = ProtocolDescriptor::acp("2026-01-30");
-    let decision = state.policy_set.evaluate(&record, &protocol);
+    // The operation tells policies whether money moves; spend limits reserve only then.
+    let context = PaymentPolicyContext::new(PaymentOperation::CreateCheckout)
+        .with_org("playground")
+        .with_agent("shopping-agent");
+    let Some(policies) = POLICIES.get() else {
+        return Ok(serde_json::json!({ "error": "Payment policies not initialized" }));
+    };
+    let decision = policies.evaluate(&record, &protocol, &context).await;
+    let mut state = match lock_shop(&binding) {
+        Ok(g) => g,
+        Err(e) => return Ok(e),
+    };
 
     if decision.is_deny() {
         let reasons: Vec<String> = decision
@@ -340,10 +355,10 @@ async fn main() -> anyhow::Result<()> {
         .with(AmountThresholdGuardrail::new(Some(50_000), Some(500_000)))
         .with(MerchantAllowlistGuardrail::new(["merchant-techstore"]));
 
+    let _ = POLICIES.set(policy_set);
     let _ = SHOP.set(Arc::new(Mutex::new(ShopState {
         cart_items: Vec::new(),
         transactions: HashMap::new(),
-        policy_set,
     })));
 
     println!("  Payment guardrails configured:");
@@ -351,7 +366,7 @@ async fn main() -> anyhow::Result<()> {
     println!("    Merchant allowlist: [merchant-techstore]\n");
 
     let api_key = std::env::var("GOOGLE_API_KEY")?;
-    let model = Arc::new(GeminiModel::new(&api_key, "gemini-3.1-flash-lite-preview")?);
+    let model = Arc::new(GeminiModel::new(&api_key, "gemini-3.7-flash")?);
 
     let agent = Arc::new(
         LlmAgentBuilder::new("shopping_agent")
@@ -385,22 +400,11 @@ async fn main() -> anyhow::Result<()> {
         })
         .await?;
 
-    let runner = Runner::new(RunnerConfig {
-        app_name: "playground".into(),
-        agent,
-        session_service: sessions,
-        artifact_service: None,
-        memory_service: None,
-        plugin_manager: None,
-        run_config: None,
-        compaction_config: None,
-        context_cache_config: None,
-        cache_capable: None,
-        request_context: None,
-        cancellation_token: None,
-        intra_compaction_config: None,
-        intra_compaction_summarizer: None,
-    })?;
+    let runner = Runner::builder()
+        .app_name("playground")
+        .agent(agent)
+        .session_service(sessions)
+        .build()?;
 
     let query = "I'd like to buy a Laptop Pro and a Wireless Mouse. Ship them to me please.";
     println!("  **User:** {query}\n");

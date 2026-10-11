@@ -5,8 +5,8 @@ use adk_payments::domain::{
 };
 use adk_payments::guardrail::{
     redact_payment_text, redact_payment_value, AmountThresholdGuardrail,
-    MerchantAllowlistGuardrail, PaymentPolicyGuardrail, PaymentPolicySet,
-    SensitivePaymentDataGuardrail,
+    MerchantAllowlistGuardrail, PaymentOperation, PaymentPolicyContext, PaymentPolicyGuardrail,
+    PaymentPolicySet, SensitivePaymentDataGuardrail,
 };
 use chrono::{TimeZone, Utc};
 
@@ -73,6 +73,11 @@ async fn main() -> anyhow::Result<()> {
     println!("=== 🛡️ Payment Guardrails — Policy Enforcement & Data Redaction ===\n");
 
     let protocol = ProtocolDescriptor::acp("2026-01-30");
+    // Policies see the operation and, when configured, the paying org, agent, and spend
+    // ledger. Completing a checkout is the operation that moves money.
+    let context = PaymentPolicyContext::new(PaymentOperation::CompleteCheckout)
+        .with_org("playground")
+        .with_agent("shopping-agent");
 
     // ── 1. Amount threshold guardrail ──
     println!("── 1. Amount Threshold Guardrail ──\n");
@@ -90,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
 
     for (label, amount) in &test_amounts {
         let record = make_record("merchant-1", "TechStore", *amount);
-        let decision = amount_guard.evaluate(&record, &protocol);
+        let decision = amount_guard.evaluate(&record, &protocol, &context).await;
         let dollars = *amount as f64 / 100.0;
         let icon = if decision.is_allow() {
             "✓"
@@ -123,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
 
     for (id, name) in &merchants {
         let record = make_record(id, name, 5_000);
-        let decision = merchant_guard.evaluate(&record, &protocol);
+        let decision = merchant_guard.evaluate(&record, &protocol, &context).await;
         let icon = if decision.is_allow() { "✓" } else { "✗" };
         let status = if decision.is_allow() {
             "ALLOW".to_string()
@@ -176,7 +181,7 @@ async fn main() -> anyhow::Result<()> {
 
     for (label, id, name, amount) in &scenarios {
         let record = make_record(id, name, *amount);
-        let decision = policy_set.evaluate(&record, &protocol);
+        let decision = policy_set.evaluate(&record, &protocol, &context).await;
         let dollars = *amount as f64 / 100.0;
         let icon = if decision.is_allow() {
             "✓"

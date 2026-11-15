@@ -1,0 +1,24 @@
+[package]
+name = "kernel-wake-agent-example"
+version = "0.0.1"
+edition = "2024"
+publish = false
+description = "An autonomous inbox agent on the adk-kernel: no prompt starts it, a file landing in a watched directory does, and its turn is told the event that woke it"
+
+[workspace]
+
+[dependencies]
+adk-agent = { git = "https://github.com/zavora-ai/adk-rust", rev = "bd9ea0e508a737c3bb5dab6e45b09184ff3a2698" }
+adk-core = { git = "https://github.com/zavora-ai/adk-rust", rev = "bd9ea0e508a737c3bb5dab6e45b09184ff3a2698" }
+adk-kernel = { git = "https://github.com/zavora-ai/adk-rust", rev = "bd9ea0e508a737c3bb5dab6e45b09184ff3a2698", default-features = false, features = ["sqlite"] }
+adk-model = { git = "https://github.com/zavora-ai/adk-rust", rev = "bd9ea0e508a737c3bb5dab6e45b09184ff3a2698", default-features = false, features = ["gemini"] }
+adk-runner = { git = "https://github.com/zavora-ai/adk-rust", rev = "bd9ea0e508a737c3bb5dab6e45b09184ff3a2698" }
+adk-session = { git = "https://github.com/zavora-ai/adk-rust", rev = "bd9ea0e508a737c3bb5dab6e45b09184ff3a2698", features = ["sqlite"] }
+anyhow = "1.0"
+async-trait = "0.1"
+dotenvy = "0.15"
+futures = "0.3"
+serde_json = "1.0"
+tokio = { version = "1.40", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

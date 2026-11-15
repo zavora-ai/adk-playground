@@ -1,0 +1,29 @@
+[package]
+name = "gemini-audio-example"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+adk-core = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-rust = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3", features = ["standard"] }
+adk-model = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3", features = ["gemini"] }
+adk-tool = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-audio = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3", features = ["tts", "stt"] }
+tokio = { version = "1.40", features = ["full"] }
+futures = "0.3"
+serde_json = "1.0"
+dotenvy = "0.15"
+anyhow = "1.0"
+schemars = "1"
+serde = { version = "1.0", features = ["derive"] }
+
+[[bin]]
+name = "gemini-audio-example"
+path = "src/main.rs"
+
+[[bin]]
+name = "generate-podcast"
+path = "src/generate_podcast.rs"

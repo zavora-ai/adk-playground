@@ -1,0 +1,28 @@
+[package]
+name = "blender-console-example"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+adk-core = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-agent = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-model = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3", features = ["deepseek"] }
+# http-transport is what lets this agent reach the console host's /mcp endpoint,
+# so the run it reports into is the same one the browser is reading.
+adk-tool = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3", features = ["mcp", "http-transport"] }
+adk-runner = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-session = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+# The console lifecycle every driver has to get right: polling, acknowledgement,
+# cancellation, budgets, redaction and honest completion. Shared because each of those
+# was fixed in the analytics driver and this one kept the original behaviour.
+run-console-driver = { path = "../run_console_driver" }
+tokio = { version = "1.40", features = ["full"] }
+futures = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde_json = "1.0"
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

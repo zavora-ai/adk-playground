@@ -1,0 +1,31 @@
+[package]
+name = "a2a-writing-agent"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "client"
+path = "src/bin/client.rs"
+
+[dependencies]
+adk-server = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3", features = ["a2a-v1"] }
+adk-agent = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-model = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3", features = ["gemini", "openai"] }
+adk-runner = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-session = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-core = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+a2a-protocol-types = "0.12.1"
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+dotenvy = "0.15"
+futures = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
+clap = { version = "4", features = ["derive", "env"] }

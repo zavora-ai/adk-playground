@@ -1,0 +1,17 @@
+[package]
+name = "gemini-managed-agents"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+adk-gemini = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3", features = ["interactions"] }
+tokio = { version = "1.40", features = ["full"] }
+futures = "0.3"
+serde_json = "1.0"
+dotenvy = "0.15"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

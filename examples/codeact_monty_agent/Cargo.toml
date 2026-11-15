@@ -1,0 +1,25 @@
+[package]
+name = "codeact-monty-agent-example"
+version = "0.0.1"
+edition = "2024"
+publish = false
+description = "Runs the ADK-Rust CodeActAgent against a real Python interpreter via the Monty-backed CodeRuntime"
+
+# Standalone example crate with its own workspace, like the other examples. It
+# depends (transitively, through adk-codeact-monty) on `monty` from crates.io,
+# which requires rustc 1.95+ — see rust-toolchain.toml.
+[workspace]
+
+[dependencies]
+adk-core = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-agent = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3", features = ["codeact"] }
+adk-runner = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-session = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-codeact-monty = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+tokio = { version = "1.40", features = ["full"] }
+serde_json = "1.0"
+futures = "0.3"
+anyhow = "1.0"
+async-trait = "0.1"
+dotenvy = "0.15"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

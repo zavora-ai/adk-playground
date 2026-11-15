@@ -1,0 +1,15 @@
+[package]
+name = "a2a-quickstart"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+adk-rust = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3", features = ["standard"] }
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

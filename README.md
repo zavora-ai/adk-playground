@@ -235,6 +235,30 @@ Every example links directly to the live playground. Click to open.
 | [ACP Server](https://playground.adk-rust.com/#acp_server) | Expose ADK agents via Agent Client Protocol — IDE connections (Kiro, VS Code, Claude Code) |
 | [Retry & Reflect](https://playground.adk-rust.com/#retry_reflect) | Plugin handles tool failures with exponential backoff and reflection prompts |
 
+## ADK-Rust teaching examples
+
+[`examples/`](examples/) holds 100 standalone crates that each teach one ADK-Rust
+feature — A2A, ACP, MCP, graph workflows, realtime voice, managed agents, the
+harness, and more. They moved here from the `examples/` directory of
+[adk-rust](https://github.com/zavora-ai/adk-rust) under their original directory
+names; [`examples/README.md`](examples/README.md) is the index.
+
+| | Playground examples | Teaching examples |
+|---|---|---|
+| Location | `playground/backend/examples/*.rs` | `examples/<name>/` |
+| Shape | Single file, run by the hosted playground | Standalone crate with its own `Cargo.toml` and `Cargo.lock` |
+| ADK-Rust dependency | crates.io release | Git dependency pinned to one adk-rust commit |
+| Rust | 1.85+ | 1.95.0+ |
+
+```bash
+cd examples/yaml_agent
+cargo run
+```
+
+The git pin stands in for ADK-Rust 3.0.0, which is not on crates.io yet;
+[`examples/README.md`](examples/README.md#adk-rust-dependency) names the commit and
+the steps to move it.
+
 ## Environment variables
 
 Create a `.env` file or set these in your shell:

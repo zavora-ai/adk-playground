@@ -1,0 +1,17 @@
+[package]
+name = "project-scoped-memory-example"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "project-scoped-memory"
+path = "src/main.rs"
+
+[dependencies]
+adk-core = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+adk-memory = { git = "https://github.com/zavora-ai/adk-rust", rev = "ca01dd8ec861f0d6b321a7c56857adea9cda25d3" }
+tokio = { version = "1", features = ["full"] }
+chrono = "0.4"

@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ADK-Rust 3 Walkthrough</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one reading column, figures a little wider, in the home's own visual language. */
+  :root {
+    --bg: #fafaf9;
+    --card: #ffffff;
+    --fg: #1c1917;
+    --muted: #57534e;
+    --line: #e7e5e4;
+    --soft: #f5f5f4;
+    --accent: #c2410c;
+    --accent-soft: #fff1e8;
+    --ok: #15803d;
+    --font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --text: 44rem;
+    --wide: 72rem;
+    --r: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0c0a09; --card: #1c1917; --fg: #f5f5f4; --muted: #a8a29e; --line: #2e2a27;
+      --soft: #171412; --accent: #ff8a4c; --accent-soft: #2a1a12; --ok: #4ade80; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0c0a09; --card: #1c1917; --fg: #f5f5f4; --muted: #a8a29e; --line: #2e2a27;
+    --soft: #171412; --accent: #ff8a4c; --accent-soft: #2a1a12; --ok: #4ade80; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--fg); font: 400 16px/1.6 var(--font); -webkit-font-smoothing: antialiased; }
+  .page { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 96px; }
+  .col { max-width: var(--text); margin-inline: auto; }
+  .wide { max-width: var(--wide); margin-inline: auto; }
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 5vw, 3.2rem); font-weight: 700; }
+  h2 { font-size: clamp(1.6rem, 3.4vw, 2.1rem); font-weight: 650; }
+  h3 { font-size: 1.25rem; font-weight: 600; }
+  p { margin: 0; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--soft); border: 1px solid var(--line); border-radius: 5px; padding: 0.05em 0.35em; }
+  pre { margin: 0; font: 13.5px/1.6 var(--mono); background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; overflow-x: auto; }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+  ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+  .eyebrow { font: 500 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .muted { color: var(--muted); }
+
+  /* Top bar */
+  .bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px))) calc(-1 * max(16px, env(safe-area-inset-right, 0px))); padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .bar-inner { max-width: var(--wide); margin-inline: auto; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .brand { font-weight: 650; display: flex; align-items: center; gap: 8px; color: var(--fg); text-decoration: none; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+  .bar nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  .bar nav a { color: var(--muted); text-decoration: none; font-size: 14px; padding: 4px 10px; border-radius: 6px; }
+  .bar nav a:hover { color: var(--fg); background: var(--soft); }
+
+  /* Opening */
+  .intro { padding-block: 64px 40px; display: grid; gap: 20px; }
+  .lede { font-size: 1.15rem; color: var(--muted); max-width: 40rem; }
+  .status { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+  .status th, .status td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .status th { font: 500 12px var(--mono); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+  .table-wrap { overflow-x: auto; }
+
+  .parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 14px; margin-top: 8px; }
+  .part { display: grid; gap: 10px; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 12px 16px; transition: border-color 160ms ease; }
+  .part:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+  .part img { border-radius: 6px; border: 1px solid var(--line); aspect-ratio: 16 / 10; object-fit: cover; object-position: top left; width: 100%; }
+  .part strong { font-weight: 600; }
+  .part span { font-size: 14px; color: var(--muted); }
+
+  .note { border: 1px solid var(--line); background: var(--card); border-radius: var(--r); padding: 14px 16px; font-size: 15px; display: grid; gap: 4px; }
+  .note b { font-weight: 600; }
+
+  /* Parts and steps */
+  .part-head { padding-block: 72px 8px; border-top: 1px solid var(--line); margin-top: 48px; display: grid; gap: 12px; }
+  .step { padding-block: 40px 0; display: grid; gap: 14px; }
+  .step .col { display: grid; gap: 12px; }
+  figure { margin: 0; }
+  .shot { display: block; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--card); cursor: zoom-in; box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.12); }
+  .shot img { display: block; width: 100%; height: auto; }
+  /* Screenshots follow the viewer's theme where a dark one exists. */
+  .shot.dark-only { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .has-dark .shot.dark-only { display: block; }
+    :root:not([data-theme="light"]) .has-dark .shot.light-only { display: none; }
+  }
+  :root[data-theme="dark"] .has-dark .shot.dark-only { display: block; }
+  :root[data-theme="dark"] .has-dark .shot.light-only { display: none; }
+  figcaption { font-size: 13.5px; color: var(--muted); margin-top: 8px; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 18px; align-items: start; }
+  .pair .narrow { max-width: 22rem; justify-self: center; width: 100%; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font: 500 12.5px var(--mono); padding: 3px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--muted); }
+
+  .list { display: grid; gap: 10px; }
+  .list li b { font-weight: 600; }
+
+  /* adk-ui gallery */
+  .catalogs { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  .catalogs td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .catalogs td:first-child { font-weight: 600; white-space: nowrap; width: 1%; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 18px; align-items: start; }
+  .gallery .tag { font: 500 11.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+
+  .checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 14px; }
+  .check { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 6px; }
+  .check .num { font-size: 1.8rem; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .check .ok { color: var(--ok); font-size: 13px; font-weight: 500; }
+
+  dialog { border: 0; padding: 0; background: transparent; max-width: min(96vw, 1600px); max-height: 94vh; }
+  dialog::backdrop { background: rgb(12 10 9 / 0.78); }
+  dialog img { display: block; max-width: 100%; max-height: 92vh; width: auto; height: auto; border-radius: 8px; cursor: zoom-out; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+  html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+</style>
+
+<div class="page">
+  <header class="bar">
+    <div class="bar-inner">
+      <a class="brand" href="#top"><span class="dot" aria-hidden="true"></span>ADK-Rust 3 walkthrough</a>
+      <nav aria-label="Parts">
+        <a href="#home">The home</a>
+        <a href="#genui">genui</a>
+        <a href="#adk-ui">adk-ui 3</a>
+        <a href="#try">Try it</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="wide intro" id="top">
+    <p class="eyebrow">Walkthrough · November 2026</p>
+    <h1>The home, genui and adk-ui&nbsp;3</h1>
+    <p class="lede">What was built for ADK-Rust 3's people-facing side, screen by screen. Every screenshot was taken from the code in review, in a real browser. Most come from the home's example data, and the 3D yard comes from a scripted agent. Nothing here is a mock-up.</p>
+    <div class="table-wrap">
+      <table class="status">
+        <thead><tr><th>Part</th><th>Where</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>The home, genui</td><td><a id="pr-rust" href="https://github.com/zavora-ai/adk-rust/pull/1499">zavora-ai/adk-rust#1499</a> · <code>feat/genui-sota</code></td><td><span class="pill">In review</span></td></tr>
+          <tr><td>adk-ui 3</td><td><a id="pr-ui" href="https://github.com/zavora-ai/adk-ui/pull/4">zavora-ai/adk-ui#4</a> · <code>v3-sota</code></td><td><span class="pill">In review</span> <span class="muted">after the adk-rust PR and the ADK-Rust 3.0 release</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="parts">
+      <a class="part" href="#home"><img src="images/home-threads.png" alt="" loading="lazy"><strong>1 · The web home, redesigned</strong><span>Where people watch, steer and approve their agents.</span></a>
+      <a class="part" href="#genui"><img src="images/genui-scene.png" alt="" loading="lazy"><strong>2 · Agents that draw</strong><span>genui on A2UI 1.0: drawings only show, and every action asks first.</span></a>
+      <a class="part" href="#adk-ui"><img src="images/adkui-revenue-bars.png" alt="" loading="lazy"><strong>3 · adk-ui 3</strong><span>Catalogs agents draw with: charts, pages and 3D.</span></a>
+    </div>
+    <div class="note"><b>For the playground</b><span class="muted">The website playground runs published ADK-Rust v2 examples. Once ADK-Rust 3.0 and adk-ui 3.0 are on crates.io, adk-ui's <code>capabilities_tour</code> (a scripted, guided tour of Part 2) is the natural first v3 entry. Until then, run it locally as shown in <a href="#try">Try it</a>.</span></div>
+  </section>
+
+  <!-- Part 1 -->
+  <section id="home">
+    <div class="col part-head">
+      <p class="eyebrow">Part 1</p>
+      <h2>The web home, redesigned</h2>
+      <p class="muted">The home was redesigned as calm mission control: quiet surfaces, Geist and Geist Mono over warm neutrals, and a single accent colour reserved for "this needs you" and the primary action. It has a layered dark theme, a type scale, and motion that respects reduced-motion settings. Every screen passes axe at WCAG 2.1 AA in light and dark.</p>
+    </div>
+
+    <article class="step">
+      <div class="col"><h3>Today: what happened while you were away</h3>
+        <p>Today opens with what your agents did since you left: what was spent, whether quiet hours were respected, and what waits for you. Each event below can be opened for details. <b>How you answered this week</b> counts your approvals and where you gave them (<code>GET /surface/answers</code>), and <b>Routines today</b> lists your scheduled jobs.</p>
+        <p>The sections now live in an <b>icon rail</b> on the left. Each icon keeps its name as a tooltip and for screen readers, and the Decisions icon carries a count.</p></div>
+      <figure class="wide has-dark"><button class="shot light-only" type="button"><img src="images/home-today.png" alt="Today: spent, quiet time, waiting for you, events, how you answered, routines" loading="lazy"></button><button class="shot dark-only" type="button"><img src="images/home-today-dark.png" alt="Today, dark" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>A decision that leads with its question</h3>
+        <p>A decision card now reads question first: <i>Send the October invoice to [CLIENT]?</i> Under it come what it costs (risk, whether it can be undone, where else it can be answered), who asks, the exact call that will run, and its timeline. It offers four answers: <b>Allow once</b>, <b>Always allow for this person</b>, <b>Edit</b> and <b>Deny</b>.</p>
+        <p>Text typed while a decision is open is queued as your next message; it is never taken as an answer.</p></div>
+      <figure class="wide has-dark"><button class="shot light-only" type="button"><img src="images/home-threads.png" alt="Finance's thread with a question-first decision card" loading="lazy"></button><button class="shot dark-only" type="button"><img src="images/home-threads-dark.png" alt="Finance's thread, dark" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>What an agent ran, and where it ran</h3>
+        <p>When an agent runs a command (<code>bash</code> or <code>sandbox_exec</code>), the result reads as a <b>run card</b>: the command, its exit code and time, the last lines of output with stderr in red, and where it ran. The thread header says where this agent's commands run: an OS sandbox (Seatbelt here), a container, a remote machine, this computer, or nowhere. A command the sandbox refused is shown as refused.</p>
+        <p>The message at the top carries an <b>image</b>: people can now send screenshots to their agents.</p></div>
+      <figure class="wide has-dark"><button class="shot light-only" type="button"><img src="images/home-code-thread.png" alt="Code's thread: a screenshot, a failing cargo test run card and a refused python run" loading="lazy"></button><button class="shot dark-only" type="button"><img src="images/home-code-thread-dark.png" alt="Code's thread, dark" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Sending images</h3>
+        <p>Pick, paste or drop up to four images (PNG, JPEG, WebP or GIF) into the message box. The engine checks each image's bytes against its declared type and refuses one that's too large. A message with images is never steered into a running turn: it waits for the next one.</p>
+        <div class="chips"><span class="chip">Command::Send.images</span><span class="chip">Queue / NewThread</span><span class="chip">Harness::send_content_as</span></div></div>
+      <figure class="wide"><button class="shot" type="button"><img src="images/home-attach.png" alt="An image waiting to send with a message" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Decisions: one inbox for everything that waits</h3>
+        <p><b>Decisions</b> (<code>/ui/decisions</code>) gathers every waiting decision across agents. You can filter it by agent, answer in place, or open a decision in its thread.</p></div>
+      <figure class="wide"><button class="shot" type="button"><img src="images/home-decisions.png" alt="The Decisions inbox" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>⌘K: search and jump</h3>
+        <p><b>⌘K</b> (Ctrl+K on Windows and Linux) finds an agent's thread, a waiting decision or a section, plus a few actions such as switching the theme or adding an agent. It jumps to a decision but never answers it.</p></div>
+      <figure class="wide"><button class="shot" type="button"><img src="images/home-palette.png" alt="The command palette finding a decision" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Show a drawing beside the thread</h3>
+        <p>Any drawing can be shown <b>beside the thread</b> in a canvas. The canvas keeps the latest version, earlier versions and the drawing's A2UI in tabs, and the thread keeps a line that brings the drawing back. The canvas can also open in <b>its own window</b> (<code>/ui/canvas?session=…&amp;surface=…</code>), which follows the session live.</p></div>
+      <figure class="wide"><button class="shot" type="button"><img src="images/home-canvas.png" alt="A timesheet shown in the canvas beside Finance's thread" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>The developer view: graph, tree and trace</h3>
+        <p>For multi-agent systems, the <b>Developer</b> panel's Run view shows one run three ways, from the session's spans and events:</p>
+        <ul class="list">
+          <li><b>Tree:</b> agents, then their steps (model calls, tool calls, handoffs), each with its duration.</li>
+          <li><b>Graph:</b> who hands work to whom (delegate and handoff edges), with each agent's state.</li>
+          <li><b>Trace:</b> every step on one clock, so overlaps and waits stand out.</li>
+        </ul>
+        <p>The inspector shows the selected step's status, arguments and attributes. A call <b>held for you</b> is marked in all three views. The panel loads only when you open it.</p></div>
+      <figure class="wide has-dark"><button class="shot light-only" type="button"><img src="images/home-developer.png" alt="Developer Run view: tree, graph, trace and inspector" loading="lazy"></button><button class="shot dark-only" type="button"><img src="images/home-developer-dark.png" alt="Developer Run view, dark" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Voice: talk to your agents</h3>
+        <p>The voice view listens (its presence follows real loudness), captions both sides, and shows <b>what it can see</b> when you turn on the camera or share the screen, along with the frames actually sent to the model. A spoken "allow once" runs a <b>countdown you can cancel</b>. Serious decisions still need a screen.</p></div>
+      <figure class="wide"><button class="shot" type="button"><img src="images/home-voice-dark.png" alt="Voice: listening, a spoken allow once with a cancel countdown" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Phone and tray</h3></div>
+      <div class="wide pair">
+        <figure class="narrow has-dark"><button class="shot light-only" type="button"><img src="images/home-phone-decide.png" alt="A high-risk decision on the phone" loading="lazy"></button><button class="shot dark-only" type="button"><img src="images/home-phone-decide-dark.png" alt="The phone, dark" loading="lazy"></button><figcaption>The phone leads with the question too.</figcaption></figure>
+        <figure class="narrow"><button class="shot" type="button"><img src="images/home-tray.png" alt="The tray panel" loading="lazy"></button><figcaption>The tray panel.</figcaption></figure>
+      </div>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Also new in the home</h3>
+        <ul class="list">
+          <li><b>Stop the turn:</b> a Stop button in the message box while the agent works (<code>Command::StopTurn</code>), recorded in the audit log.</li>
+          <li><b>Suggested replies:</b> agents offer up to four short replies with the <code>suggest_replies</code> tool. Tapping one fills the message box and never sends it.</li>
+          <li><b>Thread history:</b> earlier threads with an agent (<code>GET /surface/agents/{id}/threads</code>).</li>
+          <li><b>Work log:</b> three or more plain steps in a row fold into one line saying how many ran, how many failed and how long they took.</li>
+          <li><b>Ask for a drawing:</b> puts the request in the message box. It's only sent when you press Send.</li>
+          <li><b>The terminal home</b> follows the same palette and shows images, runs and suggestions as text.</li>
+        </ul></div>
+    </article>
+  </section>
+
+  <!-- Part 2 -->
+  <section id="genui">
+    <div class="col part-head">
+      <p class="eyebrow">Part 2</p>
+      <h2>Agents that draw: genui on A2UI&nbsp;1.0</h2>
+      <p class="muted">genui lets an agent draw UI (forms, tables, charts, 3D) in the home. One rule holds throughout: a drawing only shows, and anything it does is a call the person approves.</p>
+    </div>
+
+    <article class="step">
+      <div class="col"><h3>A drawn form, and every state it goes through</h3>
+        <p>An agent draws a form; the person edits it and presses <b>Send</b>. Send doesn't run anything itself: it asks for the call on the home's ordinary decision card. Each state is shown plainly: fresh, edited, a field error, sending, sent and waiting, done.</p></div>
+      <figure class="wide"><button class="shot" type="button"><img src="images/genui-form-states.png" alt="Six states of a drawn invoice form" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>The approval card, sealed to what you saw</h3>
+        <p>When a drawn form's Send asks for a call, the card says it came "from a form Finance drew". Your yes is <b>sealed</b> (HMAC) to the exact drawing and arguments you saw, and is checked before the call runs. A high-risk call asks you to confirm it's you. If a rule changes before the call resumes, it isn't run, and the card says why.</p></div>
+      <figure class="wide"><button class="shot" type="button"><img src="images/genui-card-states.png" alt="Approval card states: waiting, decided elsewhere, high risk, refused when resumed" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Drawings that look like decisions are refused</h3>
+        <p>The server checks every drawing before it's shown. A drawing that imitates the home's own controls (approve buttons, decision colours, a decision's words) is <b>refused</b> and never reaches the screen. Drawings that pressure people with urgency, scarcity or countdowns get <b>dark-pattern warnings</b> for the agent.</p></div>
+      <figure class="wide"><button class="shot" type="button"><img src="images/genui-form-and-refusal.png" alt="A drawn invoice form, and a note that a drawing which looked like a decision was not shown" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Apps from MCP servers</h3>
+        <p>MCP Apps run sandboxed, on their own origin, and can't approve anything. An app that shows approval buttons, asks for undeclared sites, or tries to reach this computer is <b>blocked</b>. Tool calls an app asks for are held for the person like any other call. Consent comes in tiers, and a standing approval is tied to the tool's definition.</p></div>
+      <figure class="wide"><button class="shot" type="button"><img src="images/genui-app-states.png" alt="MCP App states: opening, shown, blocked, can't be shown here, a held tool call" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>3D, drawn natively in the home</h3>
+        <p>Scenes render with WebGL in a lazily loaded chunk, and the server checks them first. Colours come from the home's palette, never hex, and every state colour carries a label. Labels are page text, nothing loads from outside, and everything is capped.</p>
+        <p><b>Picking an object fills a choice field the drawing shows. Nothing is sent.</b> The drawing's own Send still asks first. Without WebGL, the scene is shown as words.</p></div>
+      <figure class="wide has-dark"><button class="shot light-only" type="button"><img src="images/genui-scene.png" alt="Yard B drawn in 3D: docks loading, free and closed" loading="lazy"></button><button class="shot dark-only" type="button"><img src="images/genui-scene-dark.png" alt="Yard B in 3D, dark" loading="lazy"></button></figure>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Under the hood</h3>
+        <ul class="list">
+          <li><b>A2UI 1.0 on the wire</b> (0.9.1 still negotiated), with rule 5 in A2UI 1.0's terms; catalogs are A2UI 1.0 documents.</li>
+          <li><b>Function calls:</b> <code>callAgentFunction</code> is answered with <code>INVALID_FUNCTION_CALL</code>, since genui defines none.</li>
+          <li><b>Live updates:</b> <code>patch_surface</code> reports what changed, keeps to a budget of 30 patches a minute, and carries a delta (<code>DrawnEnvelope::delta_from</code>).</li>
+          <li><b>A display-only extension</b> (<code>adkrust_display_only</code>), claimed on every drawing.</li>
+          <li><b>MCP elicitation:</b> a server's form is answered in the home's own fields, and a server's address is shown whole, with a look-alike warning.</li>
+          <li><b>Chat cards:</b> drawings rendered as Slack Block Kit and Teams Adaptive Cards (<code>chat_cards</code>).</li>
+          <li><b>AG-UI 1.0</b> run shape in <code>adk-server</code> for clients that name it.</li>
+          <li><b>Accessibility is part of the contract:</b> labelled fields, and a data table under every chart.</li>
+        </ul></div>
+    </article>
+  </section>
+
+  <!-- Part 3 -->
+  <section id="adk-ui">
+    <div class="col part-head">
+      <p class="eyebrow">Part 3</p>
+      <h2>adk-ui 3: catalogs agents draw with</h2>
+      <p class="muted">adk-ui 3 extends genui with three catalogs. Each catalog includes the one before it.</p>
+      <div class="table-wrap">
+        <table class="catalogs">
+          <tr><td>insight</td><td><code>Chart</code> (bar, line, area, pie, scatter), <code>VegaLite</code> (a Vega-Lite subset drawn as the home's chart), <code>Sparkline</code>, <code>Metric</code>, <code>KeyValue</code>, <code>Progress</code>, <code>Badge</code></td></tr>
+          <tr><td>studio</td><td><code>App</code> (pages the host navigates), <code>Page</code>, <code>Region</code>, <code>Scene3D</code></td></tr>
+          <tr><td>spatial</td><td>3D charts (<code>Bar3D</code>, <code>Scatter3D</code>, <code>SurfacePlot</code>, <code>Graph3D</code>, <code>Globe</code>), <code>Scene</code> (groups, lines, lights, motion, panels; picking fills a choice field), <code>DepthCard</code> (tilt, flip, layers), <code>Stage</code> (stage, wall, carousel)</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <article class="step">
+      <div class="col"><h3>Nine of the eleven sample drawings, as the home draws them</h3></div>
+      <div class="wide gallery">
+        <figure><button class="shot" type="button"><img src="images/adkui-revenue-bars.png" alt="Revenue by quarter and region in 3D bars" loading="lazy"></button><figcaption><span class="tag">spatial</span> · Revenue in 3D bars, in a <code>Stage</code></figcaption></figure>
+        <figure><button class="shot" type="button"><img src="images/adkui-globe-dark.png" alt="Shipments in flight on a globe" loading="lazy"></button><figcaption><span class="tag">spatial</span> · A fleet on a <code>Globe</code></figcaption></figure>
+        <figure><button class="shot" type="button"><img src="images/adkui-service-graph.png" alt="Checkout and its dependencies as a 3D network" loading="lazy"></button><figcaption><span class="tag">spatial</span> · A <code>Graph3D</code> beside a flipping <code>DepthCard</code></figcaption></figure>
+        <figure><button class="shot" type="button"><img src="images/adkui-yard.png" alt="Yard B docks: pick a dock, then reserve it" loading="lazy"></button><figcaption><span class="tag">spatial</span> · Pick a dock, then reserve it (asks first)</figcaption></figure>
+        <figure><button class="shot" type="button"><img src="images/adkui-terrain.png" alt="Field 7 signal as a surface plot and 3D scatter" loading="lazy"></button><figcaption><span class="tag">spatial</span> · Terrain as a <code>SurfacePlot</code> and a <code>Scatter3D</code></figcaption></figure>
+        <figure><button class="shot" type="button"><img src="images/adkui-incident.png" alt="Incident INC-2041 command view" loading="lazy"></button><figcaption><span class="tag">studio</span> · Incident command</figcaption></figure>
+        <figure><button class="shot" type="button"><img src="images/adkui-store-week.png" alt="This week in the store" loading="lazy"></button><figcaption><span class="tag">studio</span> · A week in the store</figcaption></figure>
+        <figure><button class="shot" type="button"><img src="images/adkui-release-room.png" alt="Release 2026.11 as an App" loading="lazy"></button><figcaption><span class="tag">studio</span> · A release room, as an <code>App</code></figcaption></figure>
+        <figure><button class="shot" type="button"><img src="images/adkui-streaming.png" alt="Queue throughput" loading="lazy"></button><figcaption><span class="tag">studio</span> · Live throughput</figcaption></figure>
+      </div>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Using it</h3>
+<pre><code>// The agent draws with genui's render tools, in adk-ui's spatial catalog (all three).
+let agent = HarnessAgent::builder("operations")
+    .model(model)
+    .toolset(Arc::new(adk_ui::toolset_for(adk_ui::catalogs::spatial())))
+    .instruction(adk_ui::prompts::instructions(adk_ui::catalogs::spatial()))
+    .build()?;
+
+// The home shows what it draws.
+let engine = adk_ui::catalogs::register(SurfaceEngine::builder(Arc::new(source))).build();</code></pre>
+        <p>Builders write the same JSON in Rust:</p>
+<pre><code>use adk_ui::spatial::{Motion, Object, Scene};
+
+let yard = Scene::new("yard")
+    .object(Object::new("dock-3", "box", [3.0, 0.5, 0.0]).label("Dock 3 · free").state("ok")
+        .motion(Motion::pulse(2.0)).value("dock-3"))
+    .pick_into("/dock")
+    .build();</code></pre></div>
+    </article>
+
+    <article class="step">
+      <div class="col"><h3>Also in adk-ui 3</h3>
+        <ul class="list">
+          <li><b>MCP Apps</b> (<code>--features apps</code>, the <code>adk-ui-apps</code> binary): <code>show_drawing</code> frames a checked drawing read-only in any MCP Apps host; <code>show_3d_app</code> runs model-written three.js in the sandbox and refuses code that imports, fetches, or shows a decision's words.</li>
+          <li><b>Measuring drawings:</b> <code>adk_ui::eval</code> scores a drawing the way genui will judge it, from 0 to 100 points (<code>cargo run --example drawing_eval</code>). It exits non-zero when a drawing is refused, so a CI job can gate prompt changes on it.</li>
+          <li><b>Your own host:</b> <code>@zavora-ai/adk-surface-react</code>'s <code>DrawnView</code> with adk-ui's renderers and approved brand kits (<code>KitProvider</code>).</li>
+          <li><b>A real agent:</b> <code>insight_agent</code> studies a directory with its own tools and answers in charts, pages and 3D, on Claude.</li>
+        </ul></div>
+    </article>
+  </section>
+
+  <!-- Try it -->
+  <section id="try">
+    <div class="col part-head">
+      <p class="eyebrow">Try it yourself</p>
+      <h2>Run every screen on your machine</h2>
+      <p class="muted">From an adk-rust checkout of <code>feat/genui-sota</code>:</p>
+<pre><code># The home's example, every screen, no kernel.
+cd adk-surface/web &amp;&amp; npm ci &amp;&amp; npx vite --port 8800
+#   http://127.0.0.1:8800/ui/fixture.html?section=today
+#   …?section=threads   …?section=decisions   …?screen=developer
+#   …?screen=voice      …?screen=phone&amp;phone=decide
+#   …?screen=genui&amp;genui=states   …?screen=genui&amp;genui=card-states   …?screen=genui&amp;genui=app-states
+
+# A scripted agent that draws the 3D yard: open /ui/ and ask "Which dock is free in yard B?"
+cargo run -p adk-surface --features web,genui --example scripted_genui_scenes -- 8807 /tmp/yard</code></pre>
+      <p class="muted">From an adk-ui checkout of <code>v3-sota</code>, with <code>.cargo/config.toml</code> pointing at that adk-rust checkout (see <code>.cargo/config.toml.example</code>):</p>
+<pre><code># The guided tour of Part 2: http://127.0.0.1:8810/ui/
+cargo run --features apps --example capabilities_tour
+
+# The eleven sample drawings in a host of your own.
+cd examples/custom_host &amp;&amp; npm install &amp;&amp; ADK_SURFACE_ROOT=&lt;adk-rust&gt;/adk-surface npm run dev
+
+# A real agent on Claude, answering with charts and 3D.
+ANTHROPIC_MODEL=claude-opus-5-5 AGENT_WORKSPACE=$PWD cargo run --example insight_agent</code></pre>
+    </div>
+
+    <div class="col part-head">
+      <p class="eyebrow">How it was checked</p>
+      <div class="checks">
+        <div class="check"><span class="num">671</span><span>adk-surface Rust tests, every feature</span><span class="ok">Pass · clippy clean · API drift clean</span></div>
+        <div class="check"><span class="num">443</span><span>Web home unit tests, build and chunk budget</span><span class="ok">Pass</span></div>
+        <div class="check"><span class="num">61</span><span>Playwright tests over 15 projects, with axe at WCAG 2.1 AA in light and dark</span><span class="ok">Pass</span></div>
+        <div class="check"><span class="num">adk-ui</span><span>Compiles against the branch with every feature; home and apps tests</span><span class="ok">Pass</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<dialog id="zoom" aria-label="Screenshot, full size"><img alt=""></dialog>
+<script>
+  (function () {
+    var dialog = document.getElementById("zoom");
+    var big = dialog.querySelector("img");
+    document.querySelectorAll(".shot").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var img = button.querySelector("img");
+        big.src = img.currentSrc || img.src;
+        big.alt = img.alt;
+        if (typeof dialog.showModal === "function") dialog.showModal();
+      });
+    });
+    dialog.addEventListener("click", function () { dialog.close(); });
+  })();
+</script>

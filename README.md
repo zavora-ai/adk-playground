@@ -1,6 +1,14 @@
 # ADK Playground
 
-Examples, playground, and documentation validation for [ADK-Rust](https://github.com/zavora-ai/adk-rust) — the Rust Agent Development Kit.
+The primary example repository for [ADK-Rust](https://github.com/zavora-ai/adk-rust), the Rust Agent Development Kit:
+the examples that teach each ADK-Rust feature, the hosted playground, and documentation validation.
+
+| Where | What |
+|-------|------|
+| [`examples/`](examples/) | Standalone teaching crates, one per feature, each runnable on its own ([index](examples/README.md)) |
+| [`playground/`](playground/) | The hosted playground and its single-file examples |
+
+ADK-Rust's documentation, `README.md` and `CONTRIBUTING.md` link here for examples, and new examples land here.
 
 ## Try the Playground
 

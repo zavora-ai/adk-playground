@@ -55,9 +55,14 @@ enum Command {
             default_value = "Watch my desk. Tell me when a person sits at the desk, and when a cell phone or a cup appears on it."
         )]
         ask: String,
-        /// What the terminal does with a held card.
+        /// What the terminal does with a held call: a `raise_card`, or a describe held by
+        /// `--egress ask`.
         #[arg(long, value_enum, default_value_t = CardMode::Ask)]
         cards: CardMode,
+        /// What the terminal does with the agent's held `vision_watch` calls (starting or
+        /// stopping a watch); as `--cards` when not set.
+        #[arg(long, value_enum)]
+        watches: Option<CardMode>,
         /// Stops by itself after this many minutes; Ctrl-C stops it any time.
         #[arg(long)]
         minutes: Option<u64>,
@@ -173,13 +178,15 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn,adk_kernel=error")),
         )
         .with_writer(std::io::stderr)
         .init();
     match Cli::parse().command {
         Command::Sources => sources().await,
-        Command::Watch { common, ask, cards, minutes } => watch(common, ask, cards, minutes).await,
+        Command::Watch { common, ask, cards, watches, minutes } => {
+            watch(common, ask, cards, watches, minutes).await
+        }
         Command::Serve { common, port } => {
             let settings = common.settings()?;
             let zone = common.zone(&settings)?;
@@ -199,7 +206,13 @@ async fn sources() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn watch(common: Common, ask: String, cards: CardMode, minutes: Option<u64>) -> anyhow::Result<()> {
+async fn watch(
+    common: Common,
+    ask: String,
+    cards: CardMode,
+    watches: Option<CardMode>,
+    minutes: Option<u64>,
+) -> anyhow::Result<()> {
     let settings = common.settings()?;
     let [x0, y0, x1, y1] = common.zone(&settings)?;
     banner(&settings, "headless");
@@ -250,7 +263,7 @@ async fn watch(common: Common, ask: String, cards: CardMode, minutes: Option<u64
     desk.kernel.start().await?;
     let cancel = CancellationToken::new();
     tokio::spawn(terminal::narrate(desk.sessions.clone(), cancel.clone()));
-    tokio::spawn(terminal::cards(desk.approvals.clone(), cards, cancel.clone()));
+    tokio::spawn(terminal::cards(desk.approvals.clone(), cards, watches, cancel.clone()));
 
     println!("[you] {ask}");
     desk.kernel
@@ -294,6 +307,9 @@ async fn watch(common: Common, ask: String, cards: CardMode, minutes: Option<u64
         "  egress records        {}",
         records.iter().filter(|r| r.action.starts_with("vision.egress")).count()
     );
+    for record in records.iter().filter(|r| r.action.starts_with("vision.egress")) {
+        println!("  {:<21} {}", record.action, record.ext);
+    }
     println!("  desk log              {}", settings.log_path().display());
     for status in streams.statuses() {
         println!("  source                {status:?}");

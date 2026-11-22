@@ -64,7 +64,7 @@ pub async fn narrate(sessions: Arc<dyn SessionService>, cancel: CancellationToke
             let Some(content) = &event.llm_response.content else { continue };
             for part in &content.parts {
                 match part {
-                    Part::Text { text } if content.role == "user" => {
+                    Part::Text { text } if content.role == "user" && !text.trim().is_empty() => {
                         if let Some(at) = text.find("[kernel wake") {
                             println!("[wake] {}", short(&text[at..], 160));
                         } else {
@@ -109,8 +109,14 @@ fn keyboard() -> Option<mpsc::Receiver<String>> {
     Some(rx)
 }
 
-/// Shows every held card and decides it as `mode` says.
-pub async fn cards(approvals: Arc<dyn ApprovalService>, mode: CardMode, cancel: CancellationToken) {
+/// Shows every held call and decides it: a `vision_watch` call as `watches` says when set,
+/// everything else as `mode` says.
+pub async fn cards(
+    approvals: Arc<dyn ApprovalService>,
+    mode: CardMode,
+    watches: Option<CardMode>,
+    cancel: CancellationToken,
+) {
     let mut seen = HashSet::new();
     let mut keys = match mode {
         CardMode::Ask => keyboard(),
@@ -131,9 +137,10 @@ pub async fn cards(approvals: Arc<dyn ApprovalService>, mode: CardMode, cancel: 
             println!();
             println!("┌ card held for you: {}", request.tool_name);
             println!("│ {}", short(&request.summary, 200));
-            for key in ["title", "detail"] {
-                if let Some(text) = request.args_redacted.get(key).and_then(|v| v.as_str()) {
-                    println!("│ {key}: {}", short(text, 200));
+            if let Some(args) = request.args_redacted.as_object() {
+                for (key, value) in args {
+                    let text = value.as_str().map_or_else(|| value.to_string(), str::to_string);
+                    println!("│ {key}: {}", short(&text, 200));
                 }
             }
             for evidence in &request.evidence {
@@ -148,11 +155,15 @@ pub async fn cards(approvals: Arc<dyn ApprovalService>, mode: CardMode, cancel: 
                     );
                 }
             }
+            let mode = match watches {
+                Some(watches) if request.tool_name == "vision_watch" => watches,
+                Some(_) | None => mode,
+            };
             let decision = match (mode, keys.as_mut()) {
                 (CardMode::Approve, _) => Some(true),
                 (CardMode::Deny, _) => Some(false),
                 (CardMode::Ask, Some(keys)) => {
-                    println!("└ keep this frame and acknowledge? [y/N]");
+                    println!("└ approve? [y/N]");
                     let line = tokio::select! {
                         () = cancel.cancelled() => return,
                         line = keys.recv() => line.unwrap_or_default(),

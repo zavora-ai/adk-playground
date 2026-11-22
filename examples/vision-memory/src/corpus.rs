@@ -204,6 +204,9 @@ fn write(
     Ok(())
 }
 
+/// One desk snapshot: day of the month, hour, minute, and the things on the desk with their x.
+type Snapshot = (u32, u32, u32, Vec<(Thing, i32)>);
+
 /// Writes `snapshots/`, `documents/` and `queries/` under `out`, and returns what it wrote.
 pub fn generate(out: &Path) -> anyhow::Result<String> {
     use Thing::{Book, Laptop, Mug, Papers, Phone, Plant};
@@ -215,7 +218,7 @@ pub fn generate(out: &Path) -> anyhow::Result<String> {
     }
 
     // A week on the desk. The red mug is last seen on Friday afternoon.
-    let week: [(u32, u32, u32, Vec<(Thing, i32)>); 12] = [
+    let week: [Snapshot; 12] = [
         (16, 9, 10, vec![(Laptop, 60), (Mug(RED), 360)]),
         (16, 14, 30, vec![(Laptop, 60), (Papers, 340)]),
         (17, 10, 5, vec![(Mug(RED), 120), (Phone, 330)]),

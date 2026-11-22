@@ -177,7 +177,7 @@ pub async fn serve(settings: Settings, zone: [f64; 4], port: u16) -> anyhow::Res
     let runtime = Arc::new(VisionRuntime::builder().detector(stream_detector).build()?);
     let camera = LiveCamera::stream(
         CameraFacts::new(STREAM, "Desk camera", APP, SESSION)
-            .with_place("the desk")
+            .with_place("desk")
             .passing("things on the desk")
             .with_ingest(Ingest {
                 kind: "USB camera".into(),

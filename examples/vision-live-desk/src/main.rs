@@ -308,7 +308,7 @@ async fn watch(
         records.iter().filter(|r| r.action.starts_with("vision.egress")).count()
     );
     for record in records.iter().filter(|r| r.action.starts_with("vision.egress")) {
-        println!("  {:<21} {}", record.action, record.ext);
+        println!("  {:<21} {}", record.action, serde_json::to_string(&record.ext).unwrap_or_default());
     }
     println!("  desk log              {}", settings.log_path().display());
     for status in streams.statuses() {

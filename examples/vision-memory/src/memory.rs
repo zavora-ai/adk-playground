@@ -143,6 +143,11 @@ impl Recall {
 
     /// `path`, if it lies inside a folder the memory may read.
     pub fn permitted(&self, path: &Path) -> anyhow::Result<PathBuf> {
+        let home = std::env::var_os("HOME").map(PathBuf::from);
+        let path = match (path.strip_prefix("~"), home) {
+            (Ok(rest), Some(home)) => home.join(rest),
+            _ => path.to_path_buf(),
+        };
         let path = path
             .canonicalize()
             .map_err(|e| anyhow::anyhow!("{} cannot be read: {e}", path.display()))?;

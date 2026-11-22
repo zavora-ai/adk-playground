@@ -38,7 +38,8 @@ const INSTRUCTION: &str = r#"You are Recall, the person's visual memory: snapsho
 How to answer:
 - Search with recall using a short visual description of what the image would show ("a red coffee mug on a desk", "an invoice with a totals table"), not the person's question word for word. Use recall_like when the person gives an example image.
 - Scores are SigLIP 2 similarities: small, sometimes negative, and only comparable within one search. Treat the hits clearly above the rest as matches; when no hit stands out, say the match is uncertain.
-- For "when did I last see X": search, keep the hits that stand out, and answer with the latest capture time among them.
+- To tell an object from a similar one (a red mug from a blue one, a receipt from a delivery note), pass the closest alternative as `contrast`: hits with a positive margin look more like what was asked.
+- For "when did I last see X": search with a contrast, keep the hits with a positive margin, and answer with the latest capture time among them.
 - Cite every image you rely on: file name, source, capture time, and its artifact URI. Never state something no hit supports.
 - Captions say only what was detected on the device and what the person or the desk camera noted; the score is what tells you an image looks like the description.
 - forget_source erases a source for good; call it only when the person asks to forget something, and it asks them before it runs.
@@ -68,6 +69,18 @@ enum Command {
         /// frame (camera snapshots), page (scanned documents) or image (photos).
         #[arg(long, default_value = "image")]
         kind: String,
+    },
+    /// Searches by text or by an example image directly, without the agent.
+    Search {
+        #[command(flatten)]
+        common: Common,
+        /// A short visual description, or with `--like`, a path to an example image.
+        query: String,
+        /// Searches by the example image at `query`.
+        #[arg(long)]
+        like: bool,
+        #[arg(long, default_value_t = 8)]
+        top_k: usize,
     },
     /// Asks the agent one or more questions, in one conversation.
     Ask {
@@ -102,7 +115,10 @@ struct Common {
 impl Common {
     fn allowed(&self) -> Vec<PathBuf> {
         if self.allow.is_empty() {
-            vec![PathBuf::from("demo"), PathBuf::from("../vision-live-desk/desk/snapshots")]
+            vec![
+                PathBuf::from("demo"),
+                PathBuf::from("../vision-live-desk/desk/snapshots"),
+            ]
         } else {
             self.allow.clone()
         }
@@ -125,8 +141,14 @@ struct Terminal(Confirm);
 
 #[async_trait::async_trait]
 impl ToolConfirmationHandler for Terminal {
-    async fn decide(&self, request: &ToolConfirmationRequest) -> adk_core::Result<ToolConfirmationDecision> {
-        println!("┌ {} wants to run {} {}", APP, request.tool_name, request.args);
+    async fn decide(
+        &self,
+        request: &ToolConfirmationRequest,
+    ) -> adk_core::Result<ToolConfirmationDecision> {
+        println!(
+            "┌ {} wants to run {} {}",
+            APP, request.tool_name, request.args
+        );
         let approve = match self.0 {
             Confirm::Yes => true,
             Confirm::No => false,
@@ -144,7 +166,11 @@ impl ToolConfirmationHandler for Terminal {
             Confirm::Ask => false,
         };
         println!("└ {}", if approve { "allowed" } else { "declined" });
-        Ok(if approve { ToolConfirmationDecision::Approve } else { ToolConfirmationDecision::Deny })
+        Ok(if approve {
+            ToolConfirmationDecision::Approve
+        } else {
+            ToolConfirmationDecision::Deny
+        })
     }
 }
 
@@ -160,7 +186,9 @@ async fn agent(common: &Common) -> anyhow::Result<Runner> {
     let key = std::env::var("ANTHROPIC_API_KEY")
         .ok()
         .filter(|k| !k.trim().is_empty())
-        .ok_or_else(|| anyhow::anyhow!("ANTHROPIC_API_KEY is not set: copy .env.example to .env"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("ANTHROPIC_API_KEY is not set: copy .env.example to .env")
+        })?;
     let model = Arc::new(adk_model::anthropic::AnthropicClient::new(
         adk_model::anthropic::AnthropicConfig::new(key, &common.model),
     )?);
@@ -194,7 +222,9 @@ async fn agent(common: &Common) -> anyhow::Result<Runner> {
         .agent(Arc::new(agent))
         .session_service(sessions)
         .run_config(
-            RunConfig::builder().tool_confirmation_handler(Arc::new(Terminal(common.confirm))).build(),
+            RunConfig::builder()
+                .tool_confirmation_handler(Arc::new(Terminal(common.confirm)))
+                .build(),
         )
         .build()?)
 }
@@ -203,15 +233,23 @@ async fn turn(runner: &Runner, question: &str) -> anyhow::Result<()> {
     println!();
     println!("[you] {question}");
     let mut events = runner
-        .run(UserId::new(USER)?, SessionId::new(SESSION)?, Content::new("user").with_text(question))
+        .run(
+            UserId::new(USER)?,
+            SessionId::new(SESSION)?,
+            Content::new("user").with_text(question),
+        )
         .await?;
     while let Some(event) = events.next().await {
         let event = event?;
-        let Some(content) = event.llm_response.content else { continue };
+        let Some(content) = event.llm_response.content else {
+            continue;
+        };
         for part in content.parts {
             match part {
                 Part::FunctionCall { name, args, .. } => println!("[call] {name} {args}"),
-                Part::FunctionResponse { function_response, .. } => println!(
+                Part::FunctionResponse {
+                    function_response, ..
+                } => println!(
                     "[answer] {} {}",
                     function_response.name,
                     short(&function_response.response.to_string(), 1200)
@@ -239,12 +277,44 @@ async fn main() -> anyhow::Result<()> {
         .init();
     match Cli::parse().command {
         Command::DemoCorpus { out } => println!("{}", corpus::generate(&out)?),
-        Command::Index { common, folder, source, kind } => {
-            println!("opening the memory (SigLIP 2 and RF-DETR, fetched and checked on first run)…");
+        Command::Index {
+            common,
+            folder,
+            source,
+            kind,
+        } => {
+            println!(
+                "opening the memory (SigLIP 2 and RF-DETR, fetched and checked on first run)…"
+            );
             let recall = Recall::open(&common.store, common.allowed()).await?;
             let started = std::time::Instant::now();
             let report = recall.index_folder(&folder, &source, &kind).await?;
             println!("{report} in {:.1?}", started.elapsed());
+        }
+        Command::Search {
+            common,
+            query,
+            like,
+            top_k,
+        } => {
+            let recall = Recall::open(&common.store, common.allowed()).await?;
+            let found = if like {
+                recall.recall_like(&query, top_k, None, None).await?
+            } else {
+                recall
+                    .recall_text(&query, top_k, None, None, None, None)
+                    .await?
+            };
+            for hit in found["hits"].as_array().into_iter().flatten() {
+                println!(
+                    "{:>2}  {:+.4}  {:<11} {:<26} {}",
+                    hit["rank"],
+                    hit["score"].as_f64().unwrap_or_default(),
+                    hit["source"].as_str().unwrap_or_default(),
+                    hit["capturedAt"].as_str().unwrap_or_default(),
+                    hit["caption"].as_str().unwrap_or_default(),
+                );
+            }
         }
         Command::Ask { common, questions } => {
             let runner = agent(&common).await?;

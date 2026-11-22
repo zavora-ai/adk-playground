@@ -62,14 +62,23 @@ impl FileVectorStore {
             inner.create_collection(name, &spec).await?;
             for (scope, chunks) in &collection.scopes {
                 let chunks: Vec<Chunk> = chunks.values().cloned().collect();
-                inner.upsert(name, &Scope::new(scope.clone())?, &chunks).await?;
+                inner
+                    .upsert(name, &Scope::new(scope.clone())?, &chunks)
+                    .await?;
             }
         }
-        Ok(Self { inner, saved: Mutex::new(saved), path: path.to_path_buf() })
+        Ok(Self {
+            inner,
+            saved: Mutex::new(saved),
+            path: path.to_path_buf(),
+        })
     }
 
     fn change(&self, edit: impl FnOnce(&mut Saved)) -> Result<()> {
-        let mut saved = self.saved.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut saved = self
+            .saved
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         edit(&mut saved);
         let bytes = serde_json::to_vec(&*saved).map_err(rag)?;
         let partial = self.path.with_extension("json.partial");

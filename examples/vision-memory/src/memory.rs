@@ -26,8 +26,20 @@ const EMBEDDER: &str = "siglip2-base-patch16-256-quantized";
 const IMAGE_TYPES: [&str; 4] = ["png", "jpg", "jpeg", "webp"];
 /// The labels RF-DETR adds to an image's caption.
 const LABELS: [&str; 14] = [
-    "person", "cup", "bottle", "wine glass", "cell phone", "laptop", "keyboard", "mouse", "book",
-    "potted plant", "scissors", "clock", "vase", "teddy bear",
+    "person",
+    "cup",
+    "bottle",
+    "wine glass",
+    "cell phone",
+    "laptop",
+    "keyboard",
+    "mouse",
+    "book",
+    "potted plant",
+    "scissors",
+    "clock",
+    "vase",
+    "teddy bear",
 ];
 
 /// One indexed image: where it came from, so an answer can cite its file.
@@ -58,8 +70,11 @@ fn fetch(id: &str) -> anyhow::Result<adk_vision::VerifiedModel> {
         .get(id)
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("{id} is not in adk-vision's built-in manifest"))?;
-    Ok(ModelFetcher::new(FetchConfig::from_env(), Arc::new(InMemoryAcceptanceStore::new()))
-        .fetch_blocking(&manifest)?)
+    Ok(ModelFetcher::new(
+        FetchConfig::from_env(),
+        Arc::new(InMemoryAcceptanceStore::new()),
+    )
+    .fetch_blocking(&manifest)?)
 }
 
 fn kind_of(text: &str) -> VisualKind {
@@ -77,11 +92,16 @@ impl Recall {
         std::fs::create_dir_all(root)?;
         let (siglip, detr) = tokio::task::spawn_blocking(|| -> anyhow::Result<_> {
             let siglip = SigLip2::new(&fetch(EMBEDDER)?, &OnnxOptions::default())?;
-            let detr = RfDetr::new(&fetch("rf-detr-n")?, &OnnxOptions::default())?.with_threshold(0.4);
+            let detr =
+                RfDetr::new(&fetch("rf-detr-n")?, &OnnxOptions::default())?.with_threshold(0.4);
             Ok((siglip, detr))
         })
         .await??;
-        let embedder = Arc::new(VisionRuntime::builder().embedder(Arc::new(siglip)).build()?);
+        let embedder = Arc::new(
+            VisionRuntime::builder()
+                .embedder(Arc::new(siglip))
+                .build()?,
+        );
         let labeler = Arc::new(VisionRuntime::builder().detector(Arc::new(detr)).build()?);
         let artifacts = Arc::new(FileArtifactService::new(root.join("images"))?);
         let store = Arc::new(FileVectorStore::open(&root.join("vectors.json")).await?);
@@ -94,7 +114,10 @@ impl Recall {
             Ok(bytes) => serde_json::from_slice(&bytes)?,
             Err(_) => BTreeMap::new(),
         };
-        let allowed = allowed.iter().filter_map(|dir| dir.canonicalize().ok()).collect();
+        let allowed = allowed
+            .iter()
+            .filter_map(|dir| dir.canonicalize().ok())
+            .collect();
         Ok(Self {
             memory,
             media: MediaStore::new(artifacts),
@@ -107,7 +130,9 @@ impl Recall {
     }
 
     fn manifest(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, Indexed>> {
-        self.manifest.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.manifest
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn save_manifest(&self) -> anyhow::Result<()> {
@@ -127,7 +152,11 @@ impl Recall {
             anyhow::bail!(
                 "{} is outside the folders this memory may read: {}",
                 path.display(),
-                self.allowed.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")
+                self.allowed
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         }
     }
@@ -135,10 +164,18 @@ impl Recall {
     /// Indexes every image in `folder` as `source`: stored as an artifact, labelled by RF-DETR
     /// and embedded by SigLIP 2, all on this computer. A `.json` beside an image may give its
     /// `caption` and `capturedAt`, as `vision-live-desk` writes them.
-    pub async fn index_folder(&self, folder: &Path, source: &str, kind: &str) -> anyhow::Result<Value> {
+    pub async fn index_folder(
+        &self,
+        folder: &Path,
+        source: &str,
+        kind: &str,
+    ) -> anyhow::Result<Value> {
         let folder = self.permitted(folder)?;
         anyhow::ensure!(
-            !source.is_empty() && source.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)),
+            !source.is_empty()
+                && source
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)),
             "a source is a short name of letters, digits, '-', '_' or '.'"
         );
         let mut files: Vec<PathBuf> = std::fs::read_dir(&folder)?
@@ -157,7 +194,11 @@ impl Recall {
         for file in &files {
             let bytes = std::fs::read(file)?;
             let digest = adk_vision::Digest::of(&bytes).to_string();
-            if self.manifest().get(&digest).is_some_and(|known| known.source == source) {
+            if self
+                .manifest()
+                .get(&digest)
+                .is_some_and(|known| known.source == source)
+            {
                 unchanged += 1;
                 continue;
             }
@@ -169,24 +210,42 @@ impl Recall {
                 .as_str()
                 .and_then(|t| DateTime::parse_from_rfc3339(t).ok())
                 .map(|t| t.to_utc())
-                .or_else(|| file.metadata().and_then(|m| m.modified()).ok().map(DateTime::<Utc>::from))
+                .or_else(|| {
+                    file.metadata()
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .map(DateTime::<Utc>::from)
+                })
                 .unwrap_or_else(Utc::now);
-            let (image, pixels) = self.media.put_image(&scope, bytes, Provenance::Upload).await?;
+            let (image, pixels) = self
+                .media
+                .put_image(&scope, bytes, Provenance::Upload)
+                .await?;
             let found = self
                 .labeler
-                .detect(&cx, &pixels, &DetectQuery::Classes(LABELS.iter().map(|l| (*l).to_string()).collect()))
+                .detect(
+                    &cx,
+                    &pixels,
+                    &DetectQuery::Classes(LABELS.iter().map(|l| (*l).to_string()).collect()),
+                )
                 .await?
                 .value;
             let mut labels: Vec<String> = found.iter().filter_map(|r| r.label.clone()).collect();
             labels.sort();
             labels.dedup();
-            let name = file.file_name().and_then(|n| n.to_str()).unwrap_or("image").to_string();
+            let name = file
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("image")
+                .to_string();
             let note = sidecar["caption"].as_str().unwrap_or("").trim().to_string();
             let caption = match (note.is_empty(), labels.is_empty()) {
                 (true, true) => name.clone(),
                 (true, false) => format!("{name}; detected on device: {}", labels.join(", ")),
                 (false, true) => format!("{name}: {note}"),
-                (false, false) => format!("{name}: {note}; detected on device: {}", labels.join(", ")),
+                (false, false) => {
+                    format!("{name}: {note}; detected on device: {}", labels.join(", "))
+                }
             };
             self.manifest().insert(
                 digest,
@@ -226,7 +285,13 @@ impl Recall {
         }))
     }
 
-    fn query(&self, top_k: usize, source: Option<&str>, kind: Option<&str>, day: Option<&str>) -> anyhow::Result<VisualQuery> {
+    fn query(
+        &self,
+        top_k: usize,
+        source: Option<&str>,
+        kind: Option<&str>,
+        day: Option<&str>,
+    ) -> anyhow::Result<VisualQuery> {
         let mut query = VisualQuery::top(top_k.clamp(1, 20));
         if let Some(source) = source.filter(|s| !s.is_empty()) {
             query = query.source(source);
@@ -265,14 +330,56 @@ impl Recall {
         json!({ "hits": hits })
     }
 
-    pub async fn recall_text(&self, text: &str, top_k: usize, source: Option<&str>, kind: Option<&str>, day: Option<&str>) -> anyhow::Result<Value> {
+    /// Searches by text. With `contrast`, each hit also carries its score for the contrasting
+    /// text and the margin between the two, so "a red mug" can be told from "a blue mug": a
+    /// positive margin means the image looks more like what was asked.
+    pub async fn recall_text(
+        &self,
+        text: &str,
+        top_k: usize,
+        source: Option<&str>,
+        kind: Option<&str>,
+        day: Option<&str>,
+        contrast: Option<&str>,
+    ) -> anyhow::Result<Value> {
         let query = self.query(top_k, source, kind, day)?;
-        let hits = self.memory.search_text(&VisionCx::new(), &self.scope, text, &query).await?.value;
-        Ok(self.cite(hits))
+        let cx = VisionCx::new();
+        let hits = self
+            .memory
+            .search_text(&cx, &self.scope, text, &query)
+            .await?
+            .value;
+        let mut answer = self.cite(hits);
+        if let Some(contrast) = contrast.filter(|c| !c.trim().is_empty()) {
+            let wide = self.query(200, source, kind, day)?;
+            let other: BTreeMap<String, f32> = self
+                .memory
+                .search_text(&cx, &self.scope, contrast, &wide)
+                .await?
+                .value
+                .into_iter()
+                .filter_map(|hit| Some((hit.digest?.to_string(), hit.score)))
+                .collect();
+            for hit in answer["hits"].as_array_mut().into_iter().flatten() {
+                let score = hit["score"].as_f64().unwrap_or_default() as f32;
+                if let Some(versus) = hit["digest"].as_str().and_then(|d| other.get(d)) {
+                    hit["contrastScore"] = json!((versus * 10_000.0).round() / 10_000.0);
+                    hit["margin"] = json!(((score - versus) * 10_000.0).round() / 10_000.0);
+                }
+            }
+            answer["contrast"] = json!(contrast);
+        }
+        Ok(answer)
     }
 
     /// Searches by an example image: a file in a permitted folder, or an indexed image's digest.
-    pub async fn recall_like(&self, example: &str, top_k: usize, source: Option<&str>, kind: Option<&str>) -> anyhow::Result<Value> {
+    pub async fn recall_like(
+        &self,
+        example: &str,
+        top_k: usize,
+        source: Option<&str>,
+        kind: Option<&str>,
+    ) -> anyhow::Result<Value> {
         let path = if example.starts_with("sha256:") {
             self.manifest()
                 .get(example)
@@ -284,18 +391,26 @@ impl Recall {
         let path = self.permitted(&path)?;
         let image = SourceImage::decode(&std::fs::read(&path)?, &DecodeLimits::default())?;
         let query = self.query(top_k, source, kind, None)?;
-        let hits = self.memory.search_image(&VisionCx::new(), &self.scope, &image, &query).await?.value;
+        let hits = self
+            .memory
+            .search_image(&VisionCx::new(), &self.scope, &image, &query)
+            .await?
+            .value;
         let mut answer = self.cite(hits);
         answer["example"] = json!(path.display().to_string());
         Ok(answer)
     }
 
     pub fn sources(&self) -> Value {
-        let mut by_source: BTreeMap<String, (usize, String, DateTime<Utc>, DateTime<Utc>)> = BTreeMap::new();
+        let mut by_source: BTreeMap<String, (usize, String, DateTime<Utc>, DateTime<Utc>)> =
+            BTreeMap::new();
         for indexed in self.manifest().values() {
-            let entry = by_source
-                .entry(indexed.source.clone())
-                .or_insert((0, indexed.kind.clone(), indexed.captured_at, indexed.captured_at));
+            let entry = by_source.entry(indexed.source.clone()).or_insert((
+                0,
+                indexed.kind.clone(),
+                indexed.captured_at,
+                indexed.captured_at,
+            ));
             entry.0 += 1;
             entry.2 = entry.2.min(indexed.captured_at);
             entry.3 = entry.3.max(indexed.captured_at);
@@ -317,8 +432,12 @@ impl Recall {
 
     /// Erases everything stored from `source`: its vectors, its stored images, its manifest.
     pub async fn forget(&self, source: &str) -> anyhow::Result<Erasure> {
-        let erasure = self.memory.erase_source(&VisionCx::new(), &self.scope, source).await?;
-        self.manifest().retain(|_, indexed| indexed.source != source);
+        let erasure = self
+            .memory
+            .erase_source(&VisionCx::new(), &self.scope, source)
+            .await?;
+        self.manifest()
+            .retain(|_, indexed| indexed.source != source);
         self.save_manifest()?;
         Ok(erasure)
     }

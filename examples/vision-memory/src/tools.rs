@@ -86,7 +86,10 @@ impl Tool for IndexFolder {
         let folder = PathBuf::from(text(&args, "folder").unwrap_or_default());
         let source = text(&args, "source").unwrap_or_default();
         let kind = text(&args, "kind").unwrap_or("image");
-        self.0.index_folder(&folder, source, kind).await.map_err(tool_error)
+        self.0
+            .index_folder(&folder, source, kind)
+            .await
+            .map_err(tool_error)
     }
 }
 
@@ -98,7 +101,7 @@ impl Tool for RecallText {
         "recall"
     }
     fn description(&self) -> &str {
-        "Finds images by a short visual description, such as \"a red coffee mug on a desk\". Returns hits ranked by SigLIP 2 similarity, each with its file, source, capture time, artifact and digest."
+        "Finds images by a short visual description, such as \"a red coffee mug on a desk\". Returns hits ranked by SigLIP 2 similarity, each with its file, source, capture time, artifact and digest; with `contrast`, also its margin over the contrasting description."
     }
     fn is_read_only(&self) -> bool {
         true
@@ -108,6 +111,7 @@ impl Tool for RecallText {
             json!({
                 "text": { "type": "string", "description": "What the image shows, in a few words." },
                 "day": { "type": "string", "description": "Only images captured on this day, YYYY-MM-DD." },
+                "contrast": { "type": "string", "description": "The closest thing it could be confused with, such as \"a blue coffee mug on a desk\": each hit then carries its margin over it." },
             }),
             &["text"],
         ))
@@ -120,6 +124,7 @@ impl Tool for RecallText {
                 text(&args, "source"),
                 text(&args, "kind"),
                 text(&args, "day"),
+                text(&args, "contrast"),
             )
             .await
             .map_err(tool_error)

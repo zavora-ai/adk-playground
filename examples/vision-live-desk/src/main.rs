@@ -35,7 +35,10 @@ use crate::desk::{APP, Desk, LABELS, SESSION, STREAM, Settings, USER};
 use crate::terminal::CardMode;
 
 #[derive(Parser)]
-#[command(name = "vision-live-desk", about = "An agent that watches your desk through a camera")]
+#[command(
+    name = "vision-live-desk",
+    about = "An agent that watches your desk through a camera"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -141,10 +144,17 @@ impl Common {
     fn zone(&self, settings: &Settings) -> anyhow::Result<[f64; 4]> {
         let (w, h) = settings.frame_size();
         match &self.zone {
-            None => Ok([0.0, (f64::from(h) / 3.0).round(), f64::from(w), f64::from(h)]),
+            None => Ok([
+                0.0,
+                (f64::from(h) / 3.0).round(),
+                f64::from(w),
+                f64::from(h),
+            ]),
             Some(text) => {
-                let values: Vec<f64> =
-                    text.split(',').map(|v| v.trim().parse()).collect::<Result<_, _>>()?;
+                let values: Vec<f64> = text
+                    .split(',')
+                    .map(|v| v.trim().parse())
+                    .collect::<Result<_, _>>()?;
                 let [x0, y0, x1, y1] = values[..] else {
                     anyhow::bail!("--zone is x0,y0,x1,y1");
                 };
@@ -157,9 +167,15 @@ impl Common {
 fn banner(settings: &Settings, mode: &str) {
     let (w, h) = settings.frame_size();
     println!("Desk Watch — {mode}");
-    println!("  camera      {} (sampled at {} fps, {w} × {h})", settings.device, settings.fps);
+    println!(
+        "  camera      {} (sampled at {} fps, {w} × {h})",
+        settings.device, settings.fps
+    );
     println!("  on device   RF-DETR Nano + ByteTrack; frames stay in memory");
-    println!("  agent       {} (harness, Auto mode, kernel-hosted)", settings.model);
+    println!(
+        "  agent       {} (harness, Auto mode, kernel-hosted)",
+        settings.model
+    );
     println!(
         "  leaves      only vision_describe frames, to {} ({}), egress rule `{}`, people and personal text covered first",
         desk::ANTHROPIC_HOST,
@@ -167,7 +183,10 @@ fn banner(settings: &Settings, mode: &str) {
         settings.egress
     );
     println!("  log         {}", settings.log_path().display());
-    println!("  daily caps  {} frames, ${:.2} of model calls", settings.daily_frames, settings.daily_usd);
+    println!(
+        "  daily caps  {} frames, ${:.2} of model calls",
+        settings.daily_frames, settings.daily_usd
+    );
     println!();
 }
 
@@ -184,9 +203,13 @@ async fn main() -> anyhow::Result<()> {
         .init();
     match Cli::parse().command {
         Command::Sources => sources().await,
-        Command::Watch { common, ask, cards, watches, minutes } => {
-            watch(common, ask, cards, watches, minutes).await
-        }
+        Command::Watch {
+            common,
+            ask,
+            cards,
+            watches,
+            minutes,
+        } => watch(common, ask, cards, watches, minutes).await,
         Command::Serve { common, port } => {
             let settings = common.settings()?;
             let zone = common.zone(&settings)?;
@@ -198,10 +221,17 @@ async fn main() -> anyhow::Result<()> {
 async fn sources() -> anyhow::Result<()> {
     let devices = tokio::task::spawn_blocking(DeviceSource::list).await??;
     if devices.is_empty() {
-        println!("ffmpeg lists no camera on this machine; `--device testsrc` uses its test pattern");
+        println!(
+            "ffmpeg lists no camera on this machine; `--device testsrc` uses its test pattern"
+        );
     }
     for device in devices {
-        println!("{:>3}  {:<7} {}", device.index, format!("{:?}", device.kind).to_lowercase(), device.name);
+        println!(
+            "{:>3}  {:<7} {}",
+            device.index,
+            format!("{:?}", device.kind).to_lowercase(),
+            device.name
+        );
     }
     Ok(())
 }
@@ -224,7 +254,10 @@ async fn watch(
     let streams = FrameSources::new(
         VisionCx::new()
             .with_scope(ModelCallScope::new().with_budget(frames.clone()))
-            .with_audit(AuditTrail::new(Arc::new(audit.clone())), AuditActor::default()),
+            .with_audit(
+                AuditTrail::new(Arc::new(audit.clone())),
+                AuditActor::default(),
+            ),
     );
     let zone = format!("[[{x0},{y0}],[{x1},{y0}],[{x1},{y1}],[{x0},{y1}]]");
     let desk = Desk::build(
@@ -248,28 +281,49 @@ async fn watch(
         FrameSourceId(STREAM.into()),
     ));
     streams.register(
-        SourceSpec::new(desk::camera(&settings), Arc::new(NoRedaction), keeper, desk.book.clone())
-            .describe("The camera on the person's desk, looking at the desk and the chair in front of it")
-            .detector(stream_runtime, DetectQuery::Classes(LABELS.iter().map(|l| (*l).to_string()).collect()))
-            .tracker(Arc::new(|| Box::new(ByteTracker::default()) as Box<dyn Tracker>))
-            .sampling(Sampling { fps: settings.fps, max_long_edge: Some(settings.max_long_edge) })
-            .budget(
-                FrameBudget::new(settings.fps)
-                    .with_min_local_fps((settings.fps / 4.0).min(0.5))
-                    .with_local_quota(settings.daily_frames),
-            ),
+        SourceSpec::new(
+            desk::camera(&settings),
+            Arc::new(NoRedaction),
+            keeper,
+            desk.book.clone(),
+        )
+        .describe(
+            "The camera on the person's desk, looking at the desk and the chair in front of it",
+        )
+        .detector(
+            stream_runtime,
+            DetectQuery::Classes(LABELS.iter().map(|l| (*l).to_string()).collect()),
+        )
+        .tracker(Arc::new(|| {
+            Box::new(ByteTracker::default()) as Box<dyn Tracker>
+        }))
+        .sampling(Sampling {
+            fps: settings.fps,
+            max_long_edge: Some(settings.max_long_edge),
+        })
+        .budget(
+            FrameBudget::new(settings.fps)
+                .with_min_local_fps((settings.fps / 4.0).min(0.5))
+                .with_local_quota(settings.daily_frames),
+        ),
     )?;
 
     desk.kernel.start().await?;
     let cancel = CancellationToken::new();
     tokio::spawn(terminal::narrate(desk.sessions.clone(), cancel.clone()));
-    tokio::spawn(terminal::cards(desk.approvals.clone(), cards, watches, cancel.clone()));
+    tokio::spawn(terminal::cards(
+        desk.approvals.clone(),
+        cards,
+        watches,
+        cancel.clone(),
+    ));
 
     println!("[you] {ask}");
     desk.kernel
         .processes()
         .spawn(
-            NewRun::new("interactive", APP, USER, APP, json!({ "text": ask })).with_session_id(SESSION),
+            NewRun::new("interactive", APP, USER, APP, json!({ "text": ask }))
+                .with_session_id(SESSION),
             ProcessSpec::new(ProcessKind::Interactive),
         )
         .await?;
@@ -299,16 +353,32 @@ async fn watch(
     let count = |action: &str| records.iter().filter(|r| r.action == action).count();
     println!();
     println!("summary");
-    println!("  frames metered        {}", frames.units().get(UsageUnit::Frames));
-    println!("  watches registered    {}", count("vision.watch.registered"));
+    println!(
+        "  frames metered        {}",
+        frames.units().get(UsageUnit::Frames)
+    );
+    println!(
+        "  watches registered    {}",
+        count("vision.watch.registered")
+    );
     println!("  watch events          {}", count("vision.watch.fired"));
     println!("  frames kept (memory)  {}", count("vision.evidence.kept"));
     println!(
         "  egress records        {}",
-        records.iter().filter(|r| r.action.starts_with("vision.egress")).count()
+        records
+            .iter()
+            .filter(|r| r.action.starts_with("vision.egress"))
+            .count()
     );
-    for record in records.iter().filter(|r| r.action.starts_with("vision.egress")) {
-        println!("  {:<21} {}", record.action, serde_json::to_string(&record.ext).unwrap_or_default());
+    for record in records
+        .iter()
+        .filter(|r| r.action.starts_with("vision.egress"))
+    {
+        println!(
+            "  {:<21} {}",
+            record.action,
+            serde_json::to_string(&record.ext).unwrap_or_default()
+        );
     }
     println!("  desk log              {}", settings.log_path().display());
     for status in streams.statuses() {

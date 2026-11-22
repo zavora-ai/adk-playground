@@ -14,7 +14,9 @@ use adk_core::{
     StoreApprovalService, Tool, ToolContext, ToolEffect, UserId,
 };
 use adk_harness::packs::vision::VisionPack;
-use adk_harness::{Harness, HarnessAgent, HarnessMode, InstructionsConfig, OriginClasses, ToolKind};
+use adk_harness::{
+    Harness, HarnessAgent, HarnessMode, InstructionsConfig, OriginClasses, ToolKind,
+};
 use adk_kernel::control::ControlPlaneConfig;
 use adk_kernel::{
     InMemoryProcessStore, Kernel, KernelConfig, ProcessStore, Quotas, Trigger, VisionWakeSource,
@@ -29,7 +31,8 @@ use adk_vision::stream::{
 };
 use adk_vision::{
     Detector, FetchConfig, FrameMeta, FrameRef, FrameSourceId, ImageRef, InMemoryAcceptanceStore,
-    LlmDescriber, ManifestSet, MediaStore, ModelFetcher, PersonRedactor, Provenance, VisionConfig, VisionCx, VisionRuntime, WatchEvent, WatchSink,
+    LlmDescriber, ManifestSet, MediaStore, ModelFetcher, PersonRedactor, Provenance, VisionConfig,
+    VisionCx, VisionRuntime, WatchEvent, WatchSink,
 };
 use async_trait::async_trait;
 use chrono::Local;
@@ -123,7 +126,10 @@ impl Settings {
     pub fn frame_size(&self) -> (u32, u32) {
         let (w, h) = self.video_size.unwrap_or((1280, 720));
         let scale = (self.max_long_edge as f32 / w.max(h) as f32).min(1.0);
-        ((w as f32 * scale).round() as u32, (h as f32 * scale).round() as u32)
+        (
+            (w as f32 * scale).round() as u32,
+            (h as f32 * scale).round() as u32,
+        )
     }
 
     pub fn log_path(&self) -> PathBuf {
@@ -137,13 +143,16 @@ impl Settings {
 
 /// The value of `name` in the environment, after `.env` in the current directory.
 pub fn env_key(name: &str) -> Option<String> {
-    std::env::var(name).ok().filter(|value| !value.trim().is_empty())
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 /// A Claude model through adk-model's Anthropic client.
 pub fn claude(model: &str) -> anyhow::Result<Arc<dyn Llm>> {
-    let key = env_key("ANTHROPIC_API_KEY")
-        .ok_or_else(|| anyhow::anyhow!("ANTHROPIC_API_KEY is not set: copy .env.example to .env"))?;
+    let key = env_key("ANTHROPIC_API_KEY").ok_or_else(|| {
+        anyhow::anyhow!("ANTHROPIC_API_KEY is not set: copy .env.example to .env")
+    })?;
     Ok(Arc::new(adk_model::anthropic::AnthropicClient::new(
         adk_model::anthropic::AnthropicConfig::new(key, model),
     )?))
@@ -157,11 +166,16 @@ pub async fn rf_detr(threshold: f32) -> anyhow::Result<Arc<RfDetr>> {
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("rf-detr-n is not in the built-in manifest"))?;
     let model = tokio::task::spawn_blocking(move || {
-        ModelFetcher::new(FetchConfig::from_env(), Arc::new(InMemoryAcceptanceStore::new()))
-            .fetch_blocking(&manifest)
+        ModelFetcher::new(
+            FetchConfig::from_env(),
+            Arc::new(InMemoryAcceptanceStore::new()),
+        )
+        .fetch_blocking(&manifest)
     })
     .await??;
-    Ok(Arc::new(RfDetr::new(&model, &OnnxOptions::default())?.with_threshold(threshold)))
+    Ok(Arc::new(
+        RfDetr::new(&model, &OnnxOptions::default())?.with_threshold(threshold),
+    ))
 }
 
 /// The desk camera: a device ffmpeg captures, or its test pattern.
@@ -206,16 +220,26 @@ pub struct FrameBook {
 
 impl FrameBook {
     pub fn new(wakes: Arc<VisionWakeSource>) -> Arc<Self> {
-        Arc::new(Self { wakes, frames: Mutex::new(HashMap::new()) })
+        Arc::new(Self {
+            wakes,
+            frames: Mutex::new(HashMap::new()),
+        })
     }
 
     /// Records a frame a person raised a card from on the camera page.
     pub fn remember(&self, frame: FrameRef) {
-        self.frames.lock().unwrap_or_else(|e| e.into_inner()).insert(frame.digest.to_string(), frame);
+        self.frames
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(frame.digest.to_string(), frame);
     }
 
     pub fn get(&self, digest: &str) -> Option<FrameRef> {
-        self.frames.lock().unwrap_or_else(|e| e.into_inner()).get(digest).cloned()
+        self.frames
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(digest)
+            .cloned()
     }
 }
 
@@ -229,7 +253,11 @@ impl WatchSink for FrameBook {
             event.score,
             event.track.0,
             event.frame.index,
-            event.frame.captured_at.with_timezone(&Local).format("%H:%M:%S"),
+            event
+                .frame
+                .captured_at
+                .with_timezone(&Local)
+                .format("%H:%M:%S"),
         );
         self.remember(event.frame.clone());
         self.wakes.deliver(event).await
@@ -327,7 +355,10 @@ fn locator(frame: &FrameRef) -> ArtifactLocator {
             APP,
             USER,
             SESSION,
-            format!("vision-{}.png", frame.digest.to_string().trim_start_matches("sha256:")),
+            format!(
+                "vision-{}.png",
+                frame.digest.to_string().trim_start_matches("sha256:")
+            ),
             0,
         )
     })
@@ -361,8 +392,13 @@ impl Tool for RaiseCard {
     }
 
     fn approval_evidence(&self, args: &Value) -> Vec<Evidence> {
-        let Some(frame) = self.frame(args) else { return Vec::new() };
-        let caption = args["title"].as_str().unwrap_or("The desk camera's frame").to_string();
+        let Some(frame) = self.frame(args) else {
+            return Vec::new();
+        };
+        let caption = args["title"]
+            .as_str()
+            .unwrap_or("The desk camera's frame")
+            .to_string();
         vec![
             ImageEvidence::new(
                 frame.digest.to_string(),
@@ -378,7 +414,9 @@ impl Tool for RaiseCard {
 
     async fn execute(&self, _ctx: Arc<dyn ToolContext>, args: Value) -> adk_core::Result<Value> {
         let frame = self.frame(&args).ok_or_else(|| {
-            adk_core::AdkError::tool("no watch event kept that frame; use the digest from the wake payload")
+            adk_core::AdkError::tool(
+                "no watch event kept that frame; use the digest from the wake payload",
+            )
         })?;
         let title = args["title"].as_str().unwrap_or("desk").to_string();
         let image = ImageRef {
@@ -389,7 +427,11 @@ impl Tool for RaiseCard {
             height: frame.height,
             provenance: Provenance::Upload,
         };
-        let source = self.media.load(&image).await.map_err(adk_core::AdkError::from)?;
+        let source = self
+            .media
+            .load(&image)
+            .await
+            .map_err(adk_core::AdkError::from)?;
         let mut pixels = source.pixels().clone();
         let meta = FrameMeta {
             source: FrameSourceId(STREAM.into()),
@@ -405,7 +447,10 @@ impl Tool for RaiseCard {
         let png = pixels.encode_png().map_err(adk_core::AdkError::from)?;
         std::fs::create_dir_all(&self.snapshots)
             .map_err(|e| adk_core::AdkError::tool(e.to_string()))?;
-        let stamp = frame.captured_at.with_timezone(&Local).format("%Y%m%d-%H%M%S");
+        let stamp = frame
+            .captured_at
+            .with_timezone(&Local)
+            .format("%Y%m%d-%H%M%S");
         let file = self.snapshots.join(format!("desk-{stamp}.png"));
         std::fs::write(&file, png).map_err(|e| adk_core::AdkError::tool(e.to_string()))?;
         let detail = args["detail"].as_str().unwrap_or_default();
@@ -416,8 +461,11 @@ impl Tool for RaiseCard {
             "frame": frame.digest.to_string(),
             "peopleCovered": covered.len(),
         });
-        std::fs::write(file.with_extension("json"), serde_json::to_vec_pretty(&sidecar).unwrap_or_default())
-            .map_err(|e| adk_core::AdkError::tool(e.to_string()))?;
+        std::fs::write(
+            file.with_extension("json"),
+            serde_json::to_vec_pretty(&sidecar).unwrap_or_default(),
+        )
+        .map_err(|e| adk_core::AdkError::tool(e.to_string()))?;
         let entry = format!(
             "- {} card approved: {title}; kept {} ({} people covered)",
             Local::now().format("%Y-%m-%d %H:%M:%S"),
@@ -525,7 +573,9 @@ impl Desk {
                 .approval_service(Arc::clone(&approvals))
                 .audit_log(Arc::new(audit.clone()))
                 .tool_classes(Arc::new(DeskClasses))
-                .tool(Arc::new(DeskLog { path: settings.log_path() }))
+                .tool(Arc::new(DeskLog {
+                    path: settings.log_path(),
+                }))
                 .tool(Arc::new(card))
                 .pack_vision(pack)
                 .build()?,
@@ -570,7 +620,9 @@ impl Desk {
             .trigger(
                 Trigger::new(
                     "desk-watch",
-                    Wake::Queue { source: STREAM.into() },
+                    Wake::Queue {
+                        source: STREAM.into(),
+                    },
                     NewRun::new("background", APP, USER, APP, json!({ "text": WAKE_TASK }))
                         .with_session_id(SESSION),
                 )

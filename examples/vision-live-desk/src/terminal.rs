@@ -6,9 +6,7 @@ use std::io::IsTerminal;
 use std::sync::Arc;
 use std::time::Duration;
 
-use adk_core::{
-    ApprovalDecision, ApprovalService, Evidence, InboxQuery, Part, SubjectRef,
-};
+use adk_core::{ApprovalDecision, ApprovalService, Evidence, InboxQuery, Part, SubjectRef};
 use adk_session::{GetRequest, SessionService};
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc;
@@ -30,7 +28,10 @@ pub enum CardMode {
 }
 
 fn short(text: &str, limit: usize) -> String {
-    let flat: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+    let flat: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
     if flat.chars().count() <= limit {
         flat
     } else {
@@ -61,7 +62,9 @@ pub async fn narrate(sessions: Arc<dyn SessionService>, cancel: CancellationToke
         };
         let events = session.events().all();
         for event in events.iter().skip(printed) {
-            let Some(content) = &event.llm_response.content else { continue };
+            let Some(content) = &event.llm_response.content else {
+                continue;
+            };
             for part in &content.parts {
                 match part {
                     Part::Text { text } if content.role == "user" && !text.trim().is_empty() => {
@@ -77,7 +80,9 @@ pub async fn narrate(sessions: Arc<dyn SessionService>, cancel: CancellationToke
                     Part::FunctionCall { name, args, .. } => {
                         println!("[call] {name} {}", short(&args.to_string(), 220));
                     }
-                    Part::FunctionResponse { function_response, .. } => {
+                    Part::FunctionResponse {
+                        function_response, ..
+                    } => {
                         println!(
                             "[answer] {} {}",
                             function_response.name,
@@ -128,8 +133,12 @@ pub async fn cards(
             () = cancel.cancelled() => return,
             () = tokio::time::sleep(Duration::from_millis(700)) => {}
         }
-        let query = InboxQuery::for_approver(me.clone(), ["owner"]).with_app_name(APP).with_limit(20);
-        let Ok(page) = approvals.inbox(query).await else { continue };
+        let query = InboxQuery::for_approver(me.clone(), ["owner"])
+            .with_app_name(APP)
+            .with_limit(20);
+        let Ok(page) = approvals.inbox(query).await else {
+            continue;
+        };
         for request in page.items {
             if !seen.insert(request.id.clone()) {
                 continue;
@@ -139,7 +148,9 @@ pub async fn cards(
             println!("│ {}", short(&request.summary, 200));
             if let Some(args) = request.args_redacted.as_object() {
                 for (key, value) in args {
-                    let text = value.as_str().map_or_else(|| value.to_string(), str::to_string);
+                    let text = value
+                        .as_str()
+                        .map_or_else(|| value.to_string(), str::to_string);
                     println!("│ {key}: {}", short(&text, 200));
                 }
             }
@@ -171,7 +182,9 @@ pub async fn cards(
                     Some(line.trim().eq_ignore_ascii_case("y"))
                 }
                 (CardMode::Ask | CardMode::Hold, _) => {
-                    println!("└ held: it waits for a decision (run with --cards ask in a terminal, or use `serve`)");
+                    println!(
+                        "└ held: it waits for a decision (run with --cards ask in a terminal, or use `serve`)"
+                    );
                     None
                 }
             };
@@ -182,7 +195,10 @@ pub async fn cards(
                 ApprovalDecision::reject(me.clone(), "declined on the terminal")
             }
             .with_groups(["owner"]);
-            match approvals.decide(&request.id, request.version, decided).await {
+            match approvals
+                .decide(&request.id, request.version, decided)
+                .await
+            {
                 Ok(_) => println!("└ {}", if approve { "approved" } else { "declined" }),
                 Err(error) => println!("└ the decision was not recorded: {error}"),
             }

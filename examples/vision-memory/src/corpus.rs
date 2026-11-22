@@ -21,12 +21,18 @@ struct Canvas {
 
 impl Canvas {
     fn new() -> Self {
-        let mut canvas = Self { rgba: vec![0; (W * H * 4) as usize] };
+        let mut canvas = Self {
+            rgba: vec![0; (W * H * 4) as usize],
+        };
         for y in 0..H as i32 {
             for x in 0..W as i32 {
                 let colour = if y < DESK_TOP {
                     let t = y as f32 / DESK_TOP as f32;
-                    [(226.0 - 18.0 * t) as u8, (220.0 - 20.0 * t) as u8, (208.0 - 20.0 * t) as u8]
+                    [
+                        (226.0 - 18.0 * t) as u8,
+                        (220.0 - 20.0 * t) as u8,
+                        (208.0 - 20.0 * t) as u8,
+                    ]
                 } else {
                     // Wood: bands that drift across the desk.
                     let band = ((y + x / 23) / 9) % 3;
@@ -98,7 +104,11 @@ const RED: [u8; 3] = [196, 32, 38];
 const BLUE: [u8; 3] = [36, 84, 178];
 
 fn darker([r, g, b]: [u8; 3], by: f32) -> [u8; 3] {
-    [(r as f32 * by) as u8, (g as f32 * by) as u8, (b as f32 * by) as u8]
+    [
+        (r as f32 * by) as u8,
+        (g as f32 * by) as u8,
+        (b as f32 * by) as u8,
+    ]
 }
 
 fn draw(canvas: &mut Canvas, thing: Thing, x: i32) {
@@ -108,11 +118,17 @@ fn draw(canvas: &mut Canvas, thing: Thing, x: i32) {
             canvas.ellipse(x + 34, bottom + 4, 46, 9, [118, 80, 50]);
             canvas.ring(x + 70, 245, 20, 26, 8.0, darker(colour, 0.85));
             canvas.rect(x, top, x + 68, bottom, colour);
-            canvas.rect(x + 6, top + 6, x + 16, bottom - 6, [
-                colour[0].saturating_add(40),
-                colour[1].saturating_add(40),
-                colour[2].saturating_add(40),
-            ]);
+            canvas.rect(
+                x + 6,
+                top + 6,
+                x + 16,
+                bottom - 6,
+                [
+                    colour[0].saturating_add(40),
+                    colour[1].saturating_add(40),
+                    colour[2].saturating_add(40),
+                ],
+            );
             canvas.ellipse(x + 34, bottom, 34, 8, darker(colour, 0.8));
             canvas.ellipse(x + 34, top, 34, 9, darker(colour, 0.7));
             canvas.ellipse(x + 34, top + 1, 29, 6, [70, 42, 24]);
@@ -133,7 +149,13 @@ fn draw(canvas: &mut Canvas, thing: Thing, x: i32) {
         Thing::Papers => {
             canvas.rect(x, 240, x + 120, 352, [244, 242, 236]);
             for line in 0..8 {
-                canvas.rect(x + 12, 256 + line * 11, x + 104 - (line % 3) * 14, 259 + line * 11, [150, 150, 150]);
+                canvas.rect(
+                    x + 12,
+                    256 + line * 11,
+                    x + 104 - (line % 3) * 14,
+                    259 + line * 11,
+                    [150, 150, 150],
+                );
             }
         }
         Thing::Book => {
@@ -161,12 +183,24 @@ fn scene(things: &[(Thing, i32)]) -> DecodedImage {
 fn local(day: u32, hour: u32, minute: u32) -> DateTime<Utc> {
     let date = NaiveDate::from_ymd_opt(2026, 11, day).expect("a November date");
     let naive = date.and_hms_opt(hour, minute, 0).expect("a time");
-    Local.from_local_datetime(&naive).single().expect("an unambiguous local time").to_utc()
+    Local
+        .from_local_datetime(&naive)
+        .single()
+        .expect("an unambiguous local time")
+        .to_utc()
 }
 
-fn write(dir: &Path, name: &str, image: &DecodedImage, sidecar: serde_json::Value) -> anyhow::Result<()> {
+fn write(
+    dir: &Path,
+    name: &str,
+    image: &DecodedImage,
+    sidecar: serde_json::Value,
+) -> anyhow::Result<()> {
     std::fs::write(dir.join(format!("{name}.png")), image.encode_png()?)?;
-    std::fs::write(dir.join(format!("{name}.json")), serde_json::to_vec_pretty(&sidecar)?)?;
+    std::fs::write(
+        dir.join(format!("{name}.json")),
+        serde_json::to_vec_pretty(&sidecar)?,
+    )?;
     Ok(())
 }
 
@@ -191,7 +225,12 @@ pub fn generate(out: &Path) -> anyhow::Result<String> {
         (19, 9, 30, vec![(Plant, 100), (Phone, 320)]),
         (19, 17, 10, vec![(Laptop, 40), (Mug(BLUE), 380)]),
         (20, 10, 40, vec![(Book, 70), (Papers, 300)]),
-        (20, 16, 40, vec![(Laptop, 30), (Mug(RED), 300), (Phone, 420)]),
+        (
+            20,
+            16,
+            40,
+            vec![(Laptop, 30), (Mug(RED), 300), (Phone, 420)],
+        ),
         (21, 11, 15, vec![(Mug(BLUE), 160), (Plant, 330)]),
         (21, 18, 0, vec![(Laptop, 60), (Book, 330)]),
     ];
@@ -237,14 +276,23 @@ pub fn generate(out: &Path) -> anyhow::Result<String> {
 
     // Query images that are in no folder: an invoice from another week, and a red mug in a
     // scene the memory has not seen.
-    let other = WeekCorpus::new(WeekSpec { seed: 0x0DD5_EED5, ..WeekSpec::default() });
+    let other = WeekCorpus::new(WeekSpec {
+        seed: 0x0DD5_EED5,
+        ..WeekSpec::default()
+    });
     let invoice = other
         .items()
         .iter()
         .find(|item| item.page == Some(PageKind::Invoice))
         .ok_or_else(|| anyhow::anyhow!("the generated week has no invoice"))?;
-    std::fs::write(queries.join("receipt-example.png"), other.render(invoice).encode_png()?)?;
-    std::fs::write(queries.join("mug-example.png"), scene(&[(Mug(RED), 220)]).encode_png()?)?;
+    std::fs::write(
+        queries.join("receipt-example.png"),
+        other.render(invoice).encode_png()?,
+    )?;
+    std::fs::write(
+        queries.join("mug-example.png"),
+        scene(&[(Mug(RED), 220)]).encode_png()?,
+    )?;
 
     Ok(format!(
         "wrote {} desk snapshots to {}, {pages} scanned pages to {}, and 2 query images to {}",

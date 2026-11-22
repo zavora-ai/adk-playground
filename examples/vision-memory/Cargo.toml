@@ -1,0 +1,29 @@
+[package]
+name = "vision-memory"
+version = "0.0.1"
+edition = "2024"
+publish = false
+description = "An agent with visual memory: desk snapshots, photos and scanned documents indexed with SigLIP 2 on this computer, found again by text or by an example image, cited, and forgotten by source"
+
+[workspace]
+
+[dependencies]
+adk-agent = { git = "https://github.com/zavora-ai/adk-rust", rev = "b526a163c4856f92375df09ee89040ececd42189" }
+adk-artifact = { git = "https://github.com/zavora-ai/adk-rust", rev = "b526a163c4856f92375df09ee89040ececd42189" }
+adk-core = { git = "https://github.com/zavora-ai/adk-rust", rev = "b526a163c4856f92375df09ee89040ececd42189" }
+adk-model = { git = "https://github.com/zavora-ai/adk-rust", rev = "b526a163c4856f92375df09ee89040ececd42189", default-features = false, features = ["anthropic"] }
+adk-rag = { git = "https://github.com/zavora-ai/adk-rust", rev = "b526a163c4856f92375df09ee89040ececd42189" }
+adk-runner = { git = "https://github.com/zavora-ai/adk-rust", rev = "b526a163c4856f92375df09ee89040ececd42189" }
+adk-session = { git = "https://github.com/zavora-ai/adk-rust", rev = "b526a163c4856f92375df09ee89040ececd42189" }
+adk-vision = { git = "https://github.com/zavora-ai/adk-rust", rev = "b526a163c4856f92375df09ee89040ececd42189", features = ["memory", "onnx"] }
+anyhow = "1"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+dotenvy = "0.15"
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

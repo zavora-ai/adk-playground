@@ -44,6 +44,10 @@ sed -i "s/$OLD/$NEW/" examples/*/Cargo.toml
 for dir in examples/*/; do (cd "$dir" && cargo update --workspace); done
 ```
 
+`vision-live-desk` and `vision-memory` pin a later commit,
+`b526a163c4856f92375df09ee89040ececd42189`, the first with adk-vision's camera wakes and visual
+memory; the `sed` above leaves them as they are.
+
 `bi_analyst` and `blender_console` depend on `run_console_driver` by relative path
 (`../run_console_driver`); keep the three directories together.
 
@@ -150,4 +154,6 @@ for dir in examples/*/; do (cd "$dir" && cargo update --workspace); done
 | [`vertex_rag`](vertex_rag/) | Vertex AI RAG Engine — agentic corpus retrieval |
 | [`vertex_sandbox`](vertex_sandbox/) | Vertex AI Agent Engine Sandbox Example |
 | [`video_avatar`](video_avatar/) | Video Avatar Example |
+| [`vision-live-desk`](vision-live-desk/) | Desk Watch — an agent that watches your desk through a camera |
+| [`vision-memory`](vision-memory/) | Recall — an agent with visual memory |
 | [`yaml_agent`](yaml_agent/) | YAML Agent Definition Example |

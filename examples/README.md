@@ -48,7 +48,7 @@ for dir in examples/*/; do (cd "$dir" && cargo update --workspace); done
 `b526a163c4856f92375df09ee89040ececd42189`, the first with adk-vision's camera wakes and visual
 memory; the `sed` above leaves them as they are. `warehouse-watch` pins
 `98515241133d24f7e41f8fd272649035416a142f`, the first with the `vision_video` tool, and so does
-`ap-desk`.
+`ap-desk` and `line-inspector`.
 
 `bi_analyst` and `blender_console` depend on `run_console_driver` by relative path
 (`../run_console_driver`); keep the three directories together.
@@ -105,6 +105,7 @@ memory; the `sed` above leaves them as they are. `warehouse-watch` pins
 | [`intra_compaction`](intra_compaction/) | Intra-Compaction Example |
 | [`kernel_wake_agent`](kernel_wake_agent/) | Kernel Wake Agent — an agent an event starts |
 | [`knowledge_graph_agent`](knowledge_graph_agent/) | Knowledge-Graph Memory for a Text Agent |
+| [`line-inspector`](line-inspector/) | Line Inspector — every candle on the line inspected, borderline parts given a second look |
 | [`live_translation`](live_translation/) | Live Translation — real-time speech-to-speech in the browser |
 | [`managed_agents_custom_tools`](managed_agents_custom_tools/) | Managed Agents: Custom Tool Flow |
 | [`managed_agents_files`](managed_agents_files/) | Managed Agents: File Upload and Processing |

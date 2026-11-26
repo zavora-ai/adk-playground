@@ -48,7 +48,7 @@ for dir in examples/*/; do (cd "$dir" && cargo update --workspace); done
 `b526a163c4856f92375df09ee89040ececd42189`, the first with adk-vision's camera wakes and visual
 memory; the `sed` above leaves them as they are. `warehouse-watch` pins
 `98515241133d24f7e41f8fd272649035416a142f`, the first with the `vision_video` tool, and so does
-`ap-desk` and `line-inspector`.
+`ap-desk`, `line-inspector` and `claims-desk`.
 
 `bi_analyst` and `blender_console` depend on `run_console_driver` by relative path
 (`../run_console_driver`); keep the three directories together.
@@ -76,6 +76,7 @@ memory; the `sed` above leaves them as they are. `warehouse-watch` pins
 | [`bigquery_toolset`](bigquery_toolset/) | BigQuery Toolset Example |
 | [`blender_console`](blender_console/) | Blender Console — an agent a person can watch, and interrupt |
 | [`blender_studio`](blender_studio/) | Blender Studio — an agent that builds a 3D scene through two MCP servers |
+| [`claims-desk`](claims-desk/) | Claims Desk — motor claims assessed from their photos, estimates drafted for the adjuster |
 | [`codeact_agent`](codeact_agent/) | CodeAct Agent example |
 | [`codeact_monty_agent`](codeact_monty_agent/) | CodeAct × Monty agent example |
 | [`coding_agent`](coding_agent/) | Coding Agent example |

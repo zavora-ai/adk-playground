@@ -100,6 +100,7 @@ memory; the `sed` above leaves them as they are.
 | [`harness_pattern`](harness_pattern/) | Harness Pattern — Trait-Based Agent Execution |
 | [`ideate_with_meta`](ideate_with_meta/) | Ideate with Meta |
 | [`intra_compaction`](intra_compaction/) | Intra-Compaction Example |
+| [`kernel_wake_agent`](kernel_wake_agent/) | Kernel Wake Agent — an agent an event starts |
 | [`knowledge_graph_agent`](knowledge_graph_agent/) | Knowledge-Graph Memory for a Text Agent |
 | [`live_translation`](live_translation/) | Live Translation — real-time speech-to-speech in the browser |
 | [`managed_agents_custom_tools`](managed_agents_custom_tools/) | Managed Agents: Custom Tool Flow |

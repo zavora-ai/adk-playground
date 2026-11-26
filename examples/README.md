@@ -47,7 +47,8 @@ for dir in examples/*/; do (cd "$dir" && cargo update --workspace); done
 `vision-live-desk` and `vision-memory` pin a later commit,
 `b526a163c4856f92375df09ee89040ececd42189`, the first with adk-vision's camera wakes and visual
 memory; the `sed` above leaves them as they are. `warehouse-watch` pins
-`98515241133d24f7e41f8fd272649035416a142f`, the first with the `vision_video` tool.
+`98515241133d24f7e41f8fd272649035416a142f`, the first with the `vision_video` tool, and so does
+`ap-desk`.
 
 `bi_analyst` and `blender_console` depend on `run_console_driver` by relative path
 (`../run_console_driver`); keep the three directories together.
@@ -68,6 +69,7 @@ memory; the `sed` above leaves them as they are. `warehouse-watch` pins
 | [`agent_orchestrator`](agent_orchestrator/) | Agent Orchestrator |
 | [`agent_registry`](agent_registry/) | Agent Registry Example |
 | [`ambient_cron_agent`](ambient_cron_agent/) | Ambient Cron Agent Example |
+| [`ap-desk`](ap-desk/) | AP Desk — supplier invoices read, matched and posted, exceptions put to the clerk |
 | [`awp_agent`](awp_agent/) | AWP Agent Example |
 | [`background_runs`](background_runs/) | Background Runs Example |
 | [`bi_analyst`](bi_analyst/) | BI Analyst — an agent that works a dashboard the way a person does |

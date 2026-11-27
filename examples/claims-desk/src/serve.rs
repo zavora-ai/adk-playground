@@ -227,7 +227,8 @@ async fn state(State(page): State<Arc<Page>>) -> impl IntoResponse {
                     .iter()
                     .map(|line| {
                         let hours = line["hours"].as_f64().unwrap_or(0.0);
-                        // Priced as `draft_estimate` prices it once approved.
+                        // Priced as `draft_estimate` prices it once approved; the illustrative
+                        // list names no currency, so neither does the page.
                         let part = if line["action"] == "replace" {
                             crate::desk::price(line["part"].as_str().unwrap_or_default())
                         } else {
@@ -235,7 +236,7 @@ async fn state(State(page): State<Arc<Page>>) -> impl IntoResponse {
                         };
                         let labour = hours * PRICES.labour_per_hour;
                         json!({ "part": line["part"], "action": line["action"], "hours": hours,
-                                "partUsd": part, "labourUsd": labour, "usd": part + labour })
+                                "parts": part, "labour": labour, "amount": part + labour })
                     })
                     .collect();
                 let sum = |field: &str| lines.iter().filter_map(|l| l[field].as_f64()).sum::<f64>();
@@ -243,10 +244,10 @@ async fn state(State(page): State<Arc<Page>>) -> impl IntoResponse {
                     "severity": args["severity"],
                     "sides": args["sides"],
                     "hours": sum("hours"),
-                    "partsUsd": sum("partUsd"),
-                    "labourUsd": sum("labourUsd"),
-                    "totalUsd": sum("usd"),
-                    "labourRateUsd": PRICES.labour_per_hour,
+                    "parts": sum("parts"),
+                    "labour": sum("labour"),
+                    "total": sum("amount"),
+                    "labourRate": PRICES.labour_per_hour,
                     "lines": lines,
                 });
             }
@@ -453,7 +454,8 @@ let declining = null, sending = false, ticking = null, offlineSince = 0;
 const painted = {}, decisionNote = {}, askNote = {}, awaiting = {};
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const enc = encodeURIComponent;
-const usd = n => '$' + Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const amount = n => Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const usd = n => '$' + amount(n);
 const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
 const row = id => S && S.claims.find(c => c.id === id);
 const photo = (name, caption, alt) => `<figure><img src="/claims/photo/${enc(name)}" alt="${esc(alt)}" loading="lazy"><figcaption>${esc(caption)}</figcaption></figure>`;
@@ -546,11 +548,11 @@ function decisionBody(r, since) {
   const e = r.estimate, f = r.referral;
   if (e) {
     const lines = (e.lines || []).map(l => `<tr><td>${esc(l.part)}</td><td>${l.action === 'replace' ? 'Replace' : 'Repair'}</td>`
-      + `<td class="n">${Number(l.hours).toFixed(1)}</td><td class="n">${usd(l.usd)}</td></tr>`).join('');
+      + `<td class="n">${Number(l.hours).toFixed(1)}</td><td class="n">${amount(l.amount)}</td></tr>`).join('');
     return `<div class="card-head"><b>Estimate · ${esc(e.severity)}${(e.sides || []).length ? ' · ' + esc(e.sides.join(', ')) : ''}</b>${since}</div>`
       + `<table><thead><tr><th>Part</th><th>Work</th><th class="n">Hours</th><th class="n">Amount</th></tr></thead><tbody>${lines}</tbody>`
-      + `<tfoot><tr><td colspan="2">Total</td><td class="n">${Number(e.hours).toFixed(1)}</td><td class="n">${usd(e.totalUsd)}</td></tr></tfoot></table>`
-      + `<p class="fine">Parts ${usd(e.partsUsd)} and labour ${usd(e.labourUsd)} at ${usd(e.labourRateUsd)} an hour, from an illustrative price list.</p>`;
+      + `<tfoot><tr><td colspan="2">Total</td><td class="n">${Number(e.hours).toFixed(1)}</td><td class="n">${amount(e.total)}</td></tr></tfoot></table>`
+      + `<p class="fine">Parts ${amount(e.parts)} and labour ${amount(e.labour)} at ${amount(e.labourRate)} an hour, from an illustrative price list that names no currency.</p>`;
   }
   if (!f) return '';
   if (f.reason === 'reused_photo') {

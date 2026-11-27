@@ -4,7 +4,7 @@
 
 use std::future::IntoFuture;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use adk_artifact::ArtifactService;
 use adk_core::{RequestContext, SingleAgentLoader};
@@ -128,16 +128,18 @@ pub async fn serve(common: Common, port: u16) -> anyhow::Result<()> {
             .into_future(),
     );
 
-    // The shift plays once at the cameras' own speed; the page and the desk stay up after it.
+    // The shift plays once at the video's own speed, every frame; the page and the desk stay
+    // up after it.
     let root = crate::root();
     let seconds = common.seconds;
     let plays = tokio::spawn(async move {
+        let started = Instant::now();
         let plays = cameras.iter().map(|camera| {
             crate::watch::play(
                 &root,
                 Arc::clone(camera),
                 Arc::clone(&detector),
-                true,
+                Some(started),
                 seconds,
             )
         });

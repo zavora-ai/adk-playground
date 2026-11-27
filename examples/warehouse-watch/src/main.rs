@@ -272,7 +272,7 @@ async fn run(common: Common, cards: CardMode) -> anyhow::Result<()> {
             &root,
             Arc::clone(camera),
             Arc::clone(&detector),
-            false,
+            None,
             common.seconds,
         )
     });

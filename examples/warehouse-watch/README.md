@@ -137,9 +137,13 @@ and loaded through adk-vision's user manifests would spot them on the device for
 | `--daily-usd` | `5.00` | The kernel's daily spending cap |
 | `--out` | `out` | The shift log, signed-off incident reports and `results.json` |
 
-A replay reproduces the recording on a machine whose ffmpeg and ONNX Runtime decode and
-detect the same frames the same way; a machine that sees an approach the recording does not
-reports it as an incident with no recorded review.
+Every mode reads the cameras losslessly: `run` plays them as fast as the machine can, and
+`serve` plays them at the video's own speed by holding each frame until its time. A busy
+machine plays the shift late but never skips a frame, so a replay meets the approaches the
+recording met, and a live `serve`, reading files rather than cameras, records a shift that
+replays the same way. A replay reproduces the recording on a machine whose ffmpeg and ONNX
+Runtime decode and detect the same frames the same way; a machine that sees an approach the
+recording does not reports it as an incident with no recorded review.
 
 ## Run it in the browser
 
@@ -177,7 +181,7 @@ vehicles on the device instead, through adk-vision's user manifests.
 |------|-------|
 | `src/main.rs` | The commands, the headless run and its report |
 | `src/data.rs` | The pinned dataset, the fetch with size and SHA-256 checks, the calibration and the cut-down ground truth |
-| `src/watch.rs` | The cameras: people, the vehicle spotter, floor metres, close approaches and their clips |
+| `src/watch.rs` | The cameras, read losslessly: people, the vehicle spotter, floor metres, close approaches and their clips |
 | `src/agent.rs` | The harness agent with the vision pack, its three tools, and the kernel |
 | `src/eval.rs` | Ground-truth near-misses and the scoring |
 | `src/tape.rs` | Claude's answers recorded live and replayed |

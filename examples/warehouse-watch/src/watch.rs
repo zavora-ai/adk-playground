@@ -6,6 +6,7 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use adk_artifact::{ArtifactService, SaveRequest};
 use adk_core::{ArtifactLocator, Part};
@@ -452,8 +453,12 @@ impl Camera {
                         bbox: spot.bbox,
                         trail,
                     };
-                    // Speed over the longest baseline the trail holds, up to two seconds.
-                    let (t0, x0, y0) = now.trail[0];
+                    // Speed over the longest baseline the trail holds, up to two seconds; after
+                    // a gap of missed spots the trail is empty and the speed is not known yet.
+                    let Some(&(t0, x0, y0)) = now.trail.first() else {
+                        current.push(now);
+                        continue;
+                    };
                     let speed = (x - x0).hypot(y - y0) / ((at_ms - t0) as f64 / 1_000.0).max(0.2);
                     if speed >= MOVING_M_S {
                         self.check(&mut state, &before, &now, speed);
@@ -712,22 +717,24 @@ impl ObservationSink for Camera {
 }
 
 /// Plays one camera's video through the pipeline: RF-DETR finds people, ByteTrack follows
-/// them, and the camera's sink does the rest. `paced` plays it at its own speed, as a live
-/// camera delivers frames.
+/// them, and the camera's sink does the rest.
+///
+/// The source is always read losslessly: every sampled frame reaches the sink, so every run of
+/// the same video sees the same approaches and finds its recorded answers. `paced_from` plays
+/// the video at its own speed from that instant: the sink waits for each frame's video time,
+/// so a busy machine plays late but never skips a frame. Without it the video plays as fast as
+/// the machine can.
 pub async fn play(
     root: &Path,
     camera: Arc<Camera>,
     detector: Arc<VisionRuntime>,
-    paced: bool,
+    paced_from: Option<Instant>,
     seconds: Option<u64>,
 ) -> anyhow::Result<adk_vision::stream::StreamSummary> {
-    let source = Arc::new(
-        FileSource::new(
-            FrameSourceId(camera.name.clone()),
-            data::video(root, &camera.name),
-        )
-        .paced(paced),
-    );
+    let source = Arc::new(FileSource::new(
+        FrameSourceId(camera.name.clone()),
+        data::video(root, &camera.name),
+    ));
     let sink: Arc<dyn ObservationSink> = Arc::clone(&camera) as Arc<dyn ObservationSink>;
     let stop = CancellationToken::new();
     let pipeline = StreamPipeline::builder(source)
@@ -740,6 +747,7 @@ pub async fn play(
         .sink(Arc::new(Until {
             inner: sink,
             until_ms: seconds.map(|s| s * 1_000),
+            paced_from,
             stop: stop.clone(),
         }))
         .build()?;
@@ -750,10 +758,12 @@ pub async fn play(
     }
 }
 
-/// Stops the stream after `until_ms` of video.
+/// Stops the stream after `until_ms` of video, and holds each frame back until its video time
+/// when the video plays at its own speed.
 struct Until {
     inner: Arc<dyn ObservationSink>,
     until_ms: Option<u64>,
+    paced_from: Option<Instant>,
     stop: CancellationToken,
 }
 
@@ -766,6 +776,11 @@ impl ObservationSink for Until {
         {
             self.stop.cancel();
             return Ok(());
+        }
+        // Waiting here holds the lossless source back; a frame already late goes on at once.
+        if let Some(start) = self.paced_from {
+            let due = start + Duration::from_millis(observation.frame.pts_ms);
+            tokio::time::sleep_until(due.into()).await;
         }
         self.inner.observe(cx, observation).await
     }

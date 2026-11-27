@@ -22,7 +22,7 @@ the app found against that ground truth.
 | `adk-kernel` | One `Triggered` process per incident, under a daily spending cap |
 | `adk-harness` vision pack | `vision_video` (Claude Sonnet over the clip, `region` cropped to the person and the vehicle) and `vision_annotate`, on the governed path |
 | Governed tools | `incident` reads the measurement; `raise_incident` is held for the supervisor with the frame as evidence; `shift_log` writes the shift log |
-| `adk-surface` web home | Each incident's review as a thread and the held near-misses on the supervisor's desk, beside the Warehouse Watch page with the four cameras |
+| `adk-surface` web API | The Warehouse Watch page reads each incident's thread and its held near-miss, and answers them with the surface's `decide` and `send` commands; the web home at `/ui/` is the developer view |
 
 ```text
 4 cameras ──ffmpeg──▶ 5 fps ─▶ RF-DETR (people) ─▶ ByteTrack ─▶ floor metres ─┐
@@ -136,6 +136,7 @@ and loaded through adk-vision's user manifests would spot them on the device for
 | `--video-model` | `claude-sonnet-5-5` | What `vision_video` asks |
 | `--daily-usd` | `5.00` | The kernel's daily spending cap |
 | `--out` | `out` | The shift log, signed-off incident reports and `results.json` |
+| `--port` (`serve`) | `8816` | Where the page listens, on `127.0.0.1` |
 
 Every mode reads the cameras losslessly: `run` plays them as fast as the machine can, and
 `serve` plays them at the video's own speed by holding each frame until its time. A busy
@@ -148,16 +149,26 @@ recording does not reports it as an incident with no recorded review.
 ## Run it in the browser
 
 ```bash
-cargo run --release -- serve            # replayed
+cargo run --release -- serve            # replayed: no key, no spend
 cargo run --release -- serve --live     # live
 ```
 
-Open `http://127.0.0.1:8816/warehouse`. The four cameras play at their own speed with the people
-found on this computer outlined in green and the vehicles Claude spotted in orange. Beside them
-are the shift's counts and each close approach with what the agent made of it. **Supervisor's
-desk** opens the web home at `/ui/`: each incident's review is a thread, and every near-miss the
-agent raises waits there with the frame of the closest approach until the supervisor signs it off
-or declines it. Signing off writes `out/incidents/<id>.json` and a line in the shift log.
+Open `http://127.0.0.1:8816/warehouse`. The page is the whole app for the shift supervisor:
+
+| Part | What it shows and does |
+|------|------------------------|
+| Header | **Replay** — a recorded shift played back with no key and no spend, its spend read as the recorded run's — or **Live**, with the spend so far against `--daily-usd`; the shift's progress (`1:20 of 5:00`) and **Start the shift**. The cameras wait for it; when the video ends the button reads **Shift finished** |
+| Cameras | Each camera's first frame until the shift starts, then the video at its own speed, the people found on this computer outlined in green and the vehicles Claude spotted in orange |
+| Close approaches | Every approach as it is measured, with its status: reviewing, waiting for your sign-off, signed off, declined, or logged as not a near-miss |
+| The incident | Opens from a row: the closest frame with the person and the vehicle boxed, the clip's other frames, the measured gap and speed, and the agent's review |
+| Your decision | A near-miss the agent raised, with its report and the frame. **Approve** signs it off: the agent writes `out/incidents/<id>.json` and a line in the shift log. **Decline** takes an optional reason the agent reads. The card then reads "You approved at 08:15" |
+| Conversation and ask box | The incident's thread — your questions, the agent's replies, its tool steps as one line per turn — and **Ask about c01-022799…**. A turn that fails shows its error in its place |
+
+In a replay the ask box is off: questions need a live run. A turn the recording does not hold,
+such as the agent's reply after a decision, answers "This is a replay, and this answer was not
+recorded. Run with --live for a real answer." instead of failing; the headless `run` keeps that
+miss an error, since it checks the replay against the recording. **Developer view** in the
+footer opens the ADK-Rust web home at `/ui/`.
 
 ## What leaves the machine
 
@@ -186,4 +197,4 @@ vehicles on the device instead, through adk-vision's user manifests.
 | `src/eval.rs` | Ground-truth near-misses and the scoring |
 | `src/tape.rs` | Claude's answers recorded live and replayed |
 | `src/terminal.rs` | Each review as it happens, and held cards decided by `--cards` |
-| `src/serve.rs` | The web home and the Warehouse Watch page |
+| `src/serve.rs` | The Warehouse Watch page: the shift, the cameras, each incident with its decision and conversation |

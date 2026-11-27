@@ -354,6 +354,11 @@ impl Camera {
         self.state().spots
     }
 
+    /// The video time of the newest frame, once the camera has one.
+    pub fn at_ms(&self) -> Option<u64> {
+        self.state().latest.as_ref().map(|(at, _, _)| *at)
+    }
+
     /// The newest frame at half size as a PNG, people outlined in green and the vehicles of
     /// the last spot in orange, with its video time.
     pub fn picture(&self) -> Option<(u64, Vec<u8>)> {

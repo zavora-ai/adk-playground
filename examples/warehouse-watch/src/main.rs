@@ -78,7 +78,8 @@ enum Command {
         #[arg(long, value_enum, default_value_t = CardMode::Hold)]
         cards: CardMode,
     },
-    /// The web home: the four cameras live, the agent's threads and the supervisor's desk
+    /// The Warehouse Watch page: the four cameras, each close approach with the agent's review,
+    /// the supervisor's decisions and questions; the shift starts from the page
     Serve {
         #[command(flatten)]
         common: Common,
@@ -272,7 +273,7 @@ async fn run(common: Common, cards: CardMode) -> anyhow::Result<()> {
             &root,
             Arc::clone(camera),
             Arc::clone(&detector),
-            false,
+            None,
             common.seconds,
         )
     });

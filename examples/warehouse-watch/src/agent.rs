@@ -1,6 +1,7 @@
 //! The supervisor's agent: a harness agent with the vision pack, started by the kernel in its
 //! own session for each incident, with three tools of its own.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,8 +9,9 @@ use std::time::Duration;
 use adk_artifact::{ArtifactService, InMemoryArtifactService};
 use adk_core::audit_log::InMemoryAuditRecorder;
 use adk_core::{
-    ApprovalPolicy, ApprovalService, ApproverSelector, DurableRunStore, Evidence, ImageEvidence,
-    InMemoryApprovalStore, InMemoryRunStore, Llm, NewRun, SessionId, StoreApprovalService, Tool,
+    ApprovalPolicy, ApprovalRequest, ApprovalService, ApprovalState, ApproverSelector,
+    DurableRunStore, Evidence, ImageEvidence, InMemoryApprovalStore, InMemoryRunStore, InboxQuery,
+    Llm, NewRun, RunFilter, RunRecord, SessionId, StoreApprovalService, SubjectRef, Tool,
     ToolContext, ToolEffect, UserId,
 };
 use adk_harness::packs::vision::VisionPack;
@@ -474,6 +476,11 @@ impl Desk {
 
     /// What the agent did with an incident: the tool that decided it, if any yet.
     pub async fn decision(&self, id: &str) -> Option<String> {
+        self.review(id).await.map(|(tool, _)| tool)
+    }
+
+    /// The call that decided an incident, `raise_incident` or `shift_log`, with its arguments.
+    pub async fn review(&self, id: &str) -> Option<(String, Value)> {
         let session = self
             .sessions
             .get(adk_session::GetRequest {
@@ -491,14 +498,50 @@ impl Desk {
                 continue;
             };
             for part in &content.parts {
-                if let adk_core::Part::FunctionCall { name, .. } = part
+                if let adk_core::Part::FunctionCall { name, args, .. } = part
                     && (name == "raise_incident" || name == "shift_log")
                 {
-                    decided = Some(name.clone());
+                    decided = Some((name.clone(), args.clone()));
                 }
             }
         }
         decided
+    }
+
+    /// Every near-miss put to the supervisor, by incident, in any state.
+    pub async fn cards(&self) -> HashMap<String, ApprovalRequest> {
+        let query = InboxQuery::for_approver(SubjectRef::human(USER), ["owner"])
+            .with_app_name(APP)
+            .with_states([
+                ApprovalState::Pending,
+                ApprovalState::Approved,
+                ApprovalState::Rejected,
+                ApprovalState::Responded,
+                ApprovalState::Expired,
+                ApprovalState::Cancelled,
+            ])
+            .with_limit(500);
+        let Ok(page) = self.approvals.inbox(query).await else {
+            return HashMap::new();
+        };
+        page.items
+            .into_iter()
+            .filter(|request| request.tool_name == "raise_incident")
+            .map(|request| (request.scope.session_id.clone(), request))
+            .collect()
+    }
+
+    /// The latest run of each incident's session: the review, or the turn a question started.
+    pub async fn turns(&self) -> HashMap<String, RunRecord> {
+        let runs = self
+            .runs
+            .list(RunFilter::default().app_name(APP).user_id(USER))
+            .await
+            .unwrap_or_default();
+        // Oldest first, so each session keeps its latest.
+        runs.into_iter()
+            .filter_map(|run| Some((run.session_id.clone()?, run)))
+            .collect()
     }
 
     /// Whether the incident's review has finished or waits on the supervisor.

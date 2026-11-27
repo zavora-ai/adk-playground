@@ -18,7 +18,7 @@ scores what the desk read and decided against those annotations and the policy.
 | The app's ERP tools | `erp_lookup` (supplier, PO, goods receipt, posted invoices), `post_invoice` (an edit to the books, allowed), `raise_exception` (held for the clerk with the page) |
 | `adk-harness` | The agent in Auto mode with the vision pack: reads and posts run, exceptions wait |
 | `adk-kernel` | One `Triggered` process per invoice, in the invoice's own session, in arrival order, under a daily spending cap |
-| `adk-surface` web home | Each invoice's turn as a thread and the exceptions on the clerk's desk, beside the AP Desk page with the inbox |
+| `adk-surface` web API | The AP Desk page reads each held exception and answers it, reads each invoice's thread and sends the clerk's questions; the web home at `/ui/` is the developer view |
 
 ```text
 inbox/d07.jpg ─▶ kernel process in session d07
@@ -142,15 +142,27 @@ results (44 documents in 40s)
 ## Run it in the browser
 
 ```bash
-cargo run --release -- serve            # replayed
-cargo run --release -- serve --live     # live
+cargo run --release -- serve            # replayed: no key, no spend
+cargo run --release -- serve --live     # live; Claude's answers are recorded again
 ```
 
-Open `http://127.0.0.1:8817/ap`. The inbox fills as the desk works it: each invoice posted, on
-the clerk's desk with its kind, or still being read; choose one to see its page beside what the
-desk read from it and how many crops went to Claude. **Clerk's desk** opens the web home at
-`/ui/`: each invoice's turn is a thread, and every exception waits there with its page until the
-clerk accepts or declines it. Accepting files `out/exceptions/<doc>.json`.
+Open `http://127.0.0.1:8817/ap`. The page is the whole desk, and nothing is read until the
+clerk presses **Start the day**.
+
+| Part | What it shows and does |
+|------|------------------------|
+| Header | `Replay` or `Live`; the recorded spend ("$1.42 when it was recorded") or this run's against the daily cap ("$0.26 of $5.00"); "31 of 44 invoices worked"; **Start the day**, which reads "Day finished" once the inbox is worked |
+| Inbox | Every invoice in arrival order: waiting to be read, being read, posted, or waiting for the clerk, with its supplier and amount once read. "3 waiting for you" opens the next one |
+| What AP Desk read | The page, the fields read from it, the crops sent to Claude, and the match against the ERP: supplier, PO and goods receipt, the total against the PO or the 1,000 limit, an earlier posting with the same number, the most alike page |
+| Your decision | The invoice's exception: its kind, the mismatch against the PO or the ERP in plain words, the line of the page it is about, and AP Desk's suggestion. **Approve** files `out/exceptions/<doc>.json`; **Decline** takes an optional reason, which AP Desk reads. Once answered it collapses to "You approved at 08:25" |
+| Conversation | The clerk's messages and AP Desk's replies; each turn's tool steps as one line ("Worked for 4 s · 6 steps"), and a failed turn's reason ("Claude could not answer: …") |
+| Ask box | "Ask about d07…": a question about that invoice, answered in the conversation while the box says "AP Desk is answering…" |
+
+In a replay, decisions work and the ask box is off: questions need a live run. The turn after a
+decision was never recorded, so AP Desk answers it with "This is a replay, and this answer was
+not recorded. Run with --live for a real answer."; `run` keeps a missing answer an error, since
+there it is the determinism check. **Developer view**, in the footer, opens the ADK-Rust web
+home at `/ui/`.
 
 ## What leaves the machine
 
@@ -172,6 +184,6 @@ Every restriction is an opt-in, and this example sets none. With `out/.adk/visio
 | `src/data.rs` | FATURA's fetch and checksum, the inbox and its scans, the ERP and the expected answers |
 | `src/desk.rs` | The harness agent with the vision pack, the visual memory, the four tools and the kernel |
 | `src/eval.rs` | Fields and decisions scored against the annotations and the policy |
-| `src/tape.rs` | Claude's answers recorded live and replayed |
+| `src/tape.rs` | Claude's answers recorded live and replayed; in the browser, an unrecorded agent turn answered as a replay |
 | `src/terminal.rs` | Each invoice's turn as it happens, and exceptions decided by `--cards` |
-| `src/serve.rs` | The web home and the AP Desk page |
+| `src/serve.rs` | The AP Desk page and its routes: the day, each invoice's detail and the line of the page an exception is about |

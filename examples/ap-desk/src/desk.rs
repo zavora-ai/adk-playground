@@ -771,6 +771,32 @@ impl Desk {
 
     /// The tool calls the agent made for `doc`, in order: name and arguments.
     pub async fn calls(&self, doc: &str) -> Vec<(String, Value)> {
+        self.parts(doc)
+            .await
+            .into_iter()
+            .filter_map(|part| match part {
+                Part::FunctionCall { name, args, .. } => Some((name, args)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// What the agent's tools answered for `doc`, in order: name and response.
+    pub async fn answers(&self, doc: &str) -> Vec<(String, Value)> {
+        self.parts(doc)
+            .await
+            .into_iter()
+            .filter_map(|part| match part {
+                Part::FunctionResponse {
+                    function_response, ..
+                } => Some((function_response.name, function_response.response)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Every part of every event of `doc`'s session, in order.
+    async fn parts(&self, doc: &str) -> Vec<Part> {
         let Ok(session) = self
             .sessions
             .get(adk_session::GetRequest {
@@ -784,17 +810,12 @@ impl Desk {
         else {
             return Vec::new();
         };
-        let mut calls = Vec::new();
-        for event in session.events().all() {
-            let Some(content) = &event.llm_response.content else {
-                continue;
-            };
-            for part in &content.parts {
-                if let Part::FunctionCall { name, args, .. } = part {
-                    calls.push((name.clone(), args.clone()));
-                }
-            }
-        }
-        calls
+        session
+            .events()
+            .all()
+            .into_iter()
+            .filter_map(|event| event.llm_response.content)
+            .flat_map(|content| content.parts)
+            .collect()
     }
 }

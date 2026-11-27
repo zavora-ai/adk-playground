@@ -7,11 +7,12 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use adk_core::{
-    DataDestination, DataLocality, Llm, LlmRequest, LlmResponse, LlmResponseStream, Part,
-    SchemaAdapter,
+    Content, DataDestination, DataLocality, Llm, LlmRequest, LlmResponse, LlmResponseStream, Part,
+    SchemaAdapter, UsageMetadata,
 };
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -40,7 +41,14 @@ pub struct Tape {
     recorded: Mutex<Recorded>,
     counts: Mutex<HashMap<String, usize>>,
     spend: Mutex<BTreeMap<String, Spend>>,
+    /// A replay in the browser answers an unrecorded agent turn in words instead of failing it.
+    agent_misses_answered: AtomicBool,
 }
+
+/// The agent's reply, in a replay in the browser, to a turn the recording does not hold: a
+/// decision's closing turn or a question asked on the page.
+pub const NOT_RECORDED: &str =
+    "This is a replay, and this answer was not recorded. Run with --live for a real answer.";
 
 /// What one role's model calls used, priced from adk-model's catalog.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -73,7 +81,15 @@ impl Tape {
             recorded: Mutex::new(recorded),
             counts: Mutex::new(HashMap::new()),
             spend: Mutex::new(BTreeMap::new()),
+            agent_misses_answered: AtomicBool::new(false),
         }))
+    }
+
+    /// From now on, a replayed agent request the recording does not hold is answered with
+    /// [`NOT_RECORDED`] instead of an error. `serve` sets it, so a decision's closing turn
+    /// never fails silently; `run` leaves it off, since there a miss is the determinism check.
+    pub fn answer_agent_misses(&self) {
+        self.agent_misses_answered.store(true, Ordering::Relaxed);
     }
 
     /// Writes what a live run recorded.
@@ -184,13 +200,37 @@ impl Llm for TapedLlm {
         let key = self.tape.key(self.role, &req);
         let responses = match self.tape.mode {
             Mode::Replay => {
-                let recorded = self.tape.recorded.lock().unwrap_or_else(|e| e.into_inner());
-                recorded.answers.get(&key).cloned().ok_or_else(|| {
-                    adk_core::AdkError::model(format!(
-                        "no recorded answer for {key}: this machine saw something the recording \
-                         did not; set ANTHROPIC_API_KEY to run live"
-                    ))
-                })?
+                let recorded = self
+                    .tape
+                    .recorded
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .answers
+                    .get(&key)
+                    .cloned();
+                match recorded {
+                    Some(responses) => responses,
+                    None if self.role == "agent"
+                        && self.tape.agent_misses_answered.load(Ordering::Relaxed) =>
+                    {
+                        tracing::info!(tape.key = %key, "unrecorded agent turn answered as a replay");
+                        // A zero cost on the reply keeps the kernel's daily cap from
+                        // charging a replay for an answer nobody paid for.
+                        let mut reply =
+                            LlmResponse::new(Content::new("model").with_text(NOT_RECORDED));
+                        reply.usage_metadata = Some(UsageMetadata {
+                            cost: Some(0.0),
+                            ..UsageMetadata::default()
+                        });
+                        vec![reply]
+                    }
+                    None => {
+                        return Err(adk_core::AdkError::model(format!(
+                            "no recorded answer for {key}: this machine saw something the \
+                             recording did not; set ANTHROPIC_API_KEY to run live"
+                        )));
+                    }
+                }
             }
             Mode::Live => {
                 let mut live = self.inner.generate_content(req, stream).await?;
@@ -237,7 +277,63 @@ impl Llm for TapedLlm {
 
 #[cfg(test)]
 mod tests {
-    use super::doc_in;
+    use std::sync::Arc;
+
+    use adk_core::{Content, Llm, LlmRequest, LlmResponseStream, Part};
+    use async_trait::async_trait;
+    use futures::StreamExt;
+
+    use super::{Mode, NOT_RECORDED, Tape, TapedLlm, doc_in};
+
+    /// The live model, which a replay never calls.
+    struct Unreachable;
+
+    #[async_trait]
+    impl Llm for Unreachable {
+        fn name(&self) -> &str {
+            "unreachable"
+        }
+
+        async fn generate_content(
+            &self,
+            _: LlmRequest,
+            _: bool,
+        ) -> adk_core::Result<LlmResponseStream> {
+            unreachable!("a replay never calls the live model")
+        }
+    }
+
+    async fn reply(tape: &Arc<Tape>, role: &'static str) -> adk_core::Result<Option<String>> {
+        let model = TapedLlm::new(Arc::new(Unreachable), Arc::clone(tape), role);
+        let request = LlmRequest::new(
+            "unreachable",
+            vec![Content::new("user").with_text("What does d07 still need?")],
+        );
+        let mut stream = model.generate_content(request, false).await?;
+        let response = stream.next().await.transpose()?;
+        Ok(response
+            .and_then(|r| r.content)
+            .and_then(|c| c.parts.into_iter().next())
+            .and_then(|p| match p {
+                Part::Text { text } => Some(text),
+                _ => None,
+            }))
+    }
+
+    #[tokio::test]
+    async fn an_unrecorded_agent_turn_fails_in_a_run_and_answers_in_the_browser() {
+        let path = std::env::temp_dir().join(format!("ap-desk-tape-{}.json", std::process::id()));
+        std::fs::write(&path, r#"{"answers":{}}"#).unwrap();
+        let tape = Tape::open(&path, Mode::Replay).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert!(reply(&tape, "agent").await.is_err());
+        tape.answer_agent_misses();
+        assert_eq!(
+            reply(&tape, "agent").await.unwrap().as_deref(),
+            Some(NOT_RECORDED)
+        );
+        assert!(reply(&tape, "crop").await.is_err());
+    }
 
     #[test]
     fn finds_the_document_id() {

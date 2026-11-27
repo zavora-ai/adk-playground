@@ -19,7 +19,7 @@ those categories and the claims' seeded cases.
 | `VisualMemory` with SigLIP 2 | `similar_photos`: every earlier claim's photos, so a reused one is found again |
 | The app's tools | `claim` reads the first notice of loss; `draft_estimate` and `refer_claim` are held for the adjuster with the photos |
 | `adk-kernel` | One `Triggered` process per claim, in the claim's own session, in arrival order |
-| `adk-surface` web home | Each claim's assessment as a thread and the estimates and referrals on the adjuster's desk, beside the Claims Desk page |
+| `adk-surface` | The decisions and threads the Claims Desk page reads and answers through `/api/surface`; the web home at `/ui/` as the developer view |
 
 ```text
 CL-0404: first notice of loss + 2 photos ─▶ kernel process in session CL-0404
@@ -123,18 +123,35 @@ results (19 claims in 36s)
 | `--assessor-model` | `claude-sonnet-5-5` | What `vision_describe` asks to assess a photo |
 | `--daily-usd` | `5.00` | The kernel's daily spending cap |
 | `--out` | `out` | `results.json` |
+| `--port` | `8819` | `serve` only: the page's port |
 
 ## Run it in the browser
 
 ```bash
-cargo run --release -- serve            # replayed
-cargo run --release -- serve --live     # live
+cargo run --release -- serve                      # replayed: no key, no spend
+cargo run --release -- serve --live               # live: answers recorded again
+cargo run --release -- serve --live --claims 2    # a short live day
 ```
 
-Open `http://127.0.0.1:8819/claims`. The day's claims fill in as the desk works them: choose one
-to see its photos, what the policyholder said, the agent's notes and the estimate's lines.
-**Adjuster's desk** opens the web home at `/ui/`, where each estimate and referral waits with the
-claim's photos for the adjuster's decision.
+Open `http://127.0.0.1:8819/claims`. The page is the whole desk. The day waits until you press
+**Start the day**; the desk then works the claims in the order they arrived.
+
+| Part of the page | What it shows and does |
+|------------------|------------------------|
+| Header | `Replay` or `Live`; claims worked, estimates, referrals and the decisions waiting for you; the spend — the recorded run's in a replay (`$0.92 when it was recorded`), this run's against the daily cap when live (`$0.31 of $5.00`). After the day the button reads **Day finished**: restart the app to run it again |
+| Today's claims | Each claim with where it is — not started, assessing, its estimate or referral — and **Your decision**, **Approved** or **Declined** |
+| What the desk found | The claim's photos, policy, insured vehicle, date and account of what happened, and the desk's assessment |
+| Your decision | An estimate with its lines, hours, amounts and total; or a referral with its reason — a reused photo beside the earlier claim's photo and how alike they score, or the photo of another vehicle beside the claim's other photo. **Approve**, or **Decline** with an optional reason the desk reads. The card then reads "You approved at 08:41" or "You declined at 08:41: …" |
+| Conversation | Your questions and the desk's replies. A turn's tool steps fold into one line ("Worked for 7 s · 8 steps"); text the desk wrote between steps is not shown as a reply |
+| Ask box | "Ask about CL-0413…" sends a question in the claim's own session. "Claims Desk is answering…" shows while the turn runs; a failed turn shows its error |
+
+In a replay, decisions work and new questions need a live run, so the ask box is disabled. A turn
+the recording does not hold — the desk's closing reply after your decision — answers "This is a
+replay, and this answer was not recorded. Run with --live for a real answer." The headless `run`
+keeps such a miss an error: it is the check that the replay is the recorded day.
+
+**Developer view** in the footer opens ADK-Rust's web home at `/ui/`, with each claim's thread
+and decisions as the framework draws them.
 
 ## What leaves the machine
 
@@ -155,6 +172,6 @@ Every restriction is an opt-in, and this example sets none. `out/.adk/vision.tom
 | `src/main.rs` | The commands, working the claims, and the report |
 | `src/data.rs` | The pinned Commons files, the claims and their first notices of loss, the price list and the fetch |
 | `src/desk.rs` | The harness agent with the vision pack, the visual memory, the four tools and the kernel |
-| `src/tape.rs` | Claude's answers recorded live and replayed |
+| `src/tape.rs` | Claude's answers recorded live and replayed; under `serve`, an agent answer the recording lacks is said in words |
 | `src/terminal.rs` | Each claim's turn as it happens, and held calls decided by `--cards` |
-| `src/serve.rs` | The web home and the Claims Desk page |
+| `src/serve.rs` | The Claims Desk page and its state, Start the day, and the web home beside it |

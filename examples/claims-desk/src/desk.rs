@@ -158,6 +158,17 @@ pub struct Memory {
 }
 
 impl Memory {
+    /// What `similar_photos` found for `key` (`CL-0418/CL-0418-1.jpg`): earlier claims' photos
+    /// as `claim/photo` keys with their similarity, most alike first; empty before it ran.
+    pub fn found(&self, key: &str) -> Vec<(String, f32)> {
+        self.seen
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(key)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     async fn similar(&self, key: &str, photo: &SourceImage) -> anyhow::Result<Vec<(String, f32)>> {
         if let Some(found) = self
             .seen
@@ -437,6 +448,7 @@ pub struct Desk {
     pub harness: Arc<Harness>,
     pub kernel: Kernel,
     pub ledger: Arc<Ledger>,
+    pub memory: Arc<Memory>,
     pages: Arc<Mutex<BTreeMap<String, SourceImage>>>,
     pids: Mutex<BTreeMap<String, String>>,
 }
@@ -546,7 +558,7 @@ impl Desk {
                     ledger: Arc::clone(&ledger),
                 }))
                 .tool(Arc::new(SimilarPhotos {
-                    memory,
+                    memory: Arc::clone(&memory),
                     pages: Arc::clone(&pages),
                 }))
                 .tool(Arc::new(DraftEstimate {
@@ -602,6 +614,7 @@ impl Desk {
             harness,
             kernel,
             ledger,
+            memory,
             pages,
             pids: Mutex::new(BTreeMap::new()),
         })

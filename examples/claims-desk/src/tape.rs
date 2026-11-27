@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use adk_core::{
-    DataDestination, DataLocality, Llm, LlmRequest, LlmResponse, LlmResponseStream, Part,
-    SchemaAdapter,
+    Content, DataDestination, DataLocality, Llm, LlmRequest, LlmResponse, LlmResponseStream, Part,
+    SchemaAdapter, UsageMetadata,
 };
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -23,6 +23,20 @@ pub enum Mode {
     Live,
     Replay,
 }
+
+/// What a replay does when the agent asks something the recording does not hold.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Miss {
+    /// Fails the call: a headless run is the check that the replay is the recorded day.
+    Fail,
+    /// Answers with [`UNRECORDED`], so a turn the person started in the browser — a
+    /// decision's closing turn, a question — ends in words instead of failing silently.
+    Say,
+}
+
+/// The agent's answer to a request the recording does not hold, under [`Miss::Say`].
+pub const UNRECORDED: &str =
+    "This is a replay, and this answer was not recorded. Run with --live for a real answer.";
 
 #[derive(Default, Serialize, Deserialize)]
 struct Recorded {
@@ -36,6 +50,7 @@ struct Recorded {
 /// The recording a live run writes and a replay reads.
 pub struct Tape {
     pub mode: Mode,
+    miss: Miss,
     path: PathBuf,
     recorded: Mutex<Recorded>,
     counts: Mutex<HashMap<String, usize>>,
@@ -54,7 +69,7 @@ pub struct Spend {
 }
 
 impl Tape {
-    pub fn open(path: &Path, mode: Mode) -> anyhow::Result<Arc<Self>> {
+    pub fn open(path: &Path, mode: Mode, miss: Miss) -> anyhow::Result<Arc<Self>> {
         let recorded = match mode {
             Mode::Live => Recorded::default(),
             Mode::Replay => {
@@ -69,6 +84,7 @@ impl Tape {
         };
         Ok(Arc::new(Self {
             mode,
+            miss,
             path: path.to_path_buf(),
             recorded: Mutex::new(recorded),
             counts: Mutex::new(HashMap::new()),
@@ -185,12 +201,28 @@ impl Llm for TapedLlm {
         let responses = match self.tape.mode {
             Mode::Replay => {
                 let recorded = self.tape.recorded.lock().unwrap_or_else(|e| e.into_inner());
-                recorded.answers.get(&key).cloned().ok_or_else(|| {
-                    adk_core::AdkError::model(format!(
-                        "no recorded answer for {key}: this machine saw something the recording \
-                         did not; set ANTHROPIC_API_KEY to run live"
-                    ))
-                })?
+                match recorded.answers.get(&key) {
+                    Some(answers) => answers.clone(),
+                    // Only the agent answers in words: the assessor's answer is data the
+                    // agent acts on, so a miss there still fails loudly.
+                    None if self.role == "agent" && self.tape.miss == Miss::Say => {
+                        // A reported cost of zero, or the kernel's spend ledger commits the
+                        // call's reserved bound against the daily cap.
+                        let mut said =
+                            LlmResponse::new(Content::new("model").with_text(UNRECORDED));
+                        said.usage_metadata = Some(UsageMetadata {
+                            cost: Some(0.0),
+                            ..UsageMetadata::default()
+                        });
+                        vec![said]
+                    }
+                    None => {
+                        return Err(adk_core::AdkError::model(format!(
+                            "no recorded answer for {key}: this machine saw something the \
+                             recording did not; set ANTHROPIC_API_KEY to run live"
+                        )));
+                    }
+                }
             }
             Mode::Live => {
                 let mut live = self.inner.generate_content(req, stream).await?;
@@ -237,7 +269,74 @@ impl Llm for TapedLlm {
 
 #[cfg(test)]
 mod tests {
-    use super::claim_in;
+    use std::sync::Arc;
+
+    use adk_core::{Content, Llm, LlmRequest, LlmResponseStream, Part};
+    use async_trait::async_trait;
+    use futures::StreamExt;
+
+    use super::{Miss, Mode, Tape, TapedLlm, UNRECORDED, claim_in};
+
+    /// The model a replay never calls.
+    struct Unreachable;
+
+    #[async_trait]
+    impl Llm for Unreachable {
+        fn name(&self) -> &str {
+            "unreachable"
+        }
+
+        async fn generate_content(
+            &self,
+            _req: LlmRequest,
+            _stream: bool,
+        ) -> adk_core::Result<LlmResponseStream> {
+            Err(adk_core::AdkError::model("a replay never calls the model"))
+        }
+    }
+
+    /// What `role` answers, replaying an empty recording under `miss`, to a question about
+    /// claim CL-0413.
+    async fn replayed(role: &'static str, miss: Miss) -> adk_core::Result<Vec<String>> {
+        let path = std::env::temp_dir().join(format!(
+            "claims-desk-tape-{}-{role}-{miss:?}.json",
+            std::process::id()
+        ));
+        std::fs::write(&path, r#"{"answers":{}}"#)
+            .map_err(|e| adk_core::AdkError::model(e.to_string()))?;
+        let tape = Tape::open(&path, Mode::Replay, miss)
+            .map_err(|e| adk_core::AdkError::model(e.to_string()))?;
+        let _ = std::fs::remove_file(&path);
+        let llm = TapedLlm::new(Arc::new(Unreachable), tape, role);
+        let request = LlmRequest::new(
+            "replay",
+            vec![Content::new("user").with_text("Why is CL-0413 major?")],
+        );
+        let mut answers = Vec::new();
+        let mut stream = llm.generate_content(request, false).await?;
+        while let Some(response) = stream.next().await {
+            for part in response?.content.map(|c| c.parts).unwrap_or_default() {
+                if let Part::Text { text } = part {
+                    answers.push(text);
+                }
+            }
+        }
+        Ok(answers)
+    }
+
+    #[tokio::test]
+    async fn a_served_replay_says_an_agent_answer_was_not_recorded() {
+        assert_eq!(
+            replayed("agent", Miss::Say).await.unwrap(),
+            vec![UNRECORDED.to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_headless_replay_and_the_assessor_fail_on_a_miss() {
+        assert!(replayed("agent", Miss::Fail).await.is_err());
+        assert!(replayed("assessor", Miss::Say).await.is_err());
+    }
 
     #[test]
     fn finds_the_claim_id() {

@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
 use crate::data::{Claim, Outcome, Severity};
-use crate::tape::{Mode, Tape};
+use crate::tape::{Miss, Mode, Tape};
 use crate::terminal::CardMode;
 
 #[derive(Parser)]
@@ -60,7 +60,7 @@ enum Command {
         #[arg(long, value_enum, default_value_t = CardMode::Hold)]
         cards: CardMode,
     },
-    /// The web home and the Claims Desk page while the claims are worked
+    /// The Claims Desk page: the day starts when the adjuster presses Start the day
     Serve {
         #[command(flatten)]
         common: Common,
@@ -99,10 +99,12 @@ pub struct App {
     pub claims: Vec<Claim>,
     pub desk: Arc<desk::Desk>,
     pub started: Arc<Mutex<Vec<String>>>,
+    /// The claims whose turn came to rest: an estimate or referral held, or the run ended.
+    pub worked: Arc<Mutex<Vec<String>>>,
 }
 
 impl App {
-    pub async fn build(common: &Common) -> anyhow::Result<Self> {
+    pub async fn build(common: &Common, miss: Miss) -> anyhow::Result<Self> {
         let root = root();
         let mut claims = data::claims();
         claims.truncate(common.claims.unwrap_or(claims.len()));
@@ -119,7 +121,7 @@ impl App {
                 "--live needs ANTHROPIC_API_KEY (see .env.example); without --live the recorded answers replay"
             );
         }
-        let tape = Tape::open(&root.join("recordings/tape.json"), mode)?;
+        let tape = Tape::open(&root.join("recordings/tape.json"), mode, miss)?;
         let settings = desk::Settings {
             dir: common.out.clone(),
             agent_model: common.agent_model.clone(),
@@ -132,6 +134,7 @@ impl App {
             claims,
             desk,
             started: Arc::new(Mutex::new(Vec::new())),
+            worked: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -145,15 +148,20 @@ impl App {
                 .iter()
                 .map(|p| std::fs::read(data::photo_path(&root, &p.name)))
                 .collect::<Result<Vec<_>, _>>()?;
+            // Listed once its session exists, so a reader of the session never finds none.
+            self.desk.start(claim, photos).await?;
             self.started
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .push(claim.id.clone());
-            self.desk.start(claim, photos).await?;
             let deadline = Instant::now() + Duration::from_secs(400);
             while !self.desk.settled(&claim.id).await && Instant::now() < deadline {
                 tokio::time::sleep(Duration::from_millis(300)).await;
             }
+            self.worked
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(claim.id.clone());
         }
         Ok(())
     }
@@ -188,7 +196,7 @@ fn severity_of(text: &str) -> Option<Severity> {
 
 async fn run(common: Common, cards: CardMode) -> anyhow::Result<()> {
     let started = Instant::now();
-    let app = App::build(&common).await?;
+    let app = App::build(&common, Miss::Fail).await?;
     println!(
         "working {} claims ({})",
         app.claims.len(),

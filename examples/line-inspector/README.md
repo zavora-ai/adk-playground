@@ -18,7 +18,7 @@ line against those masks.
 | `adk-kernel` | One `Triggered` process per borderline part, in its own session |
 | `adk-harness` vision pack | `vision_describe` with two backends — `claude` (Claude Sonnet, the reasoner) and `second` (Claude Haiku, the second opinion) — and `vision_measure` on the device |
 | Governed tools | `part` reads, `decide_part` passes or rejects, `ask_engineer` is held for the engineer with the tray as evidence |
-| `adk-surface` web home | Each second look as a thread and the disputed parts on the engineer's desk, beside the line page with the latest tray, the reject log and the reject rate |
+| `adk-surface` web API | The line page reads each part's decision and thread and sends its answers and questions through `/api/surface`; the web home at `/ui/` is the developer view |
 
 ```text
 tray ─▶ StreamPipeline ─▶ inspector (on this computer): 4 candles × 9 tiles × SigLIP 2 vs known-good tiles
@@ -140,15 +140,38 @@ results (80 trays, 320 candles, in 416s)
 ## Run it in the browser
 
 ```bash
-cargo run --release -- serve            # replayed
-cargo run --release -- serve --live     # live
+cargo run --release -- serve            # replayed: no key, no spend
+cargo run --release -- serve --live     # live: the model answers questions as you ask them
 ```
 
-Open `http://127.0.0.1:8818/line`. Trays come through at one a second: the latest with each
-candle ringed green when it passed, red when rejected and amber on a second look, the shift's
-counts, the reject rate for every ten trays and the reject log with each defect's size.
-**Engineer's desk** opens the web home at `/ui/`, where every part the two models disagree on
-waits with the tray, both opinions and the size.
+Open `http://127.0.0.1:8818/line`. The page is the whole app; nothing runs until you press
+**Start the line**.
+
+| Part of the page | What it shows and does |
+|------------------|------------------------|
+| Header | The mode — **Replay** ("a recorded shift played back: no key, no spend", with the recorded spend) or **Live** (this run's spend against `--daily-usd`) — the trays inspected ("34 of 80 trays"), **Start the line**, and how many parts wait for your decision. After the last tray the button reads **Shift finished**: restart the app to run it again |
+| The line | The latest tray, each candle ringed green when it passed, red when rejected and amber on a second look; before the first tray, a note in its place |
+| This shift | Trays, rejects, second looks and the parts waiting for you |
+| Reject rate, every ten trays | One bar per ten trays on a 0–100% axis, each labelled with its trays and its rate |
+| Reject log | Every reject and second look, newest first, the parts waiting for you on top; choose a row to open the part |
+| The part | What the line found — the candle cut from its tray with its least familiar area boxed in amber and a reject's defect in red, the score, the size, Line Inspector's verdict and VisA's label — then **Your decision**, the part's conversation and **Ask about t002-p3…** |
+
+**Your decision** appears when the two models disagree on a part: Line Inspector's
+suggestion, the candle, both models' opinions with their confidence, the measured size and
+the score. **Approve** accepts the suggestion; **Decline** overrules it, with an optional
+reason that goes to the agent. The card then reads "You approved at 08:26" or "You declined
+at 08:26: <reason>", and the agent's closing reply follows in the conversation.
+
+The conversation shows your questions and Line Inspector's replies; its tool calls fold into
+one line per turn ("Worked for 4 s · 5 steps"). Each part is its own session, named by the
+part's id (`t002-p3`), so a question about a part is asked in that part's thread. In a
+replay the ask box is disabled — questions need a live run — and an answer the recording
+does not hold, such as the reply after your decision, reads "This is a replay, and this
+answer was not recorded. Run with --live for a real answer." A headless `run` keeps such a
+miss an error, since it checks that the replay is exact.
+
+**Developer view** in the footer opens the ADK-Rust web home at `/ui/`, with every thread,
+decision and run.
 
 ## What leaves the machine
 
@@ -172,4 +195,4 @@ Every restriction is an opt-in, and this example sets none. `out/.adk/vision.tom
 | `src/agent.rs` | The harness agent with the vision pack, its three tools and the kernel |
 | `src/tape.rs` | Claude's answers recorded live and replayed |
 | `src/terminal.rs` | Each second look as it happens, and parts decided by `--cards` |
-| `src/serve.rs` | The web home and the line page |
+| `src/serve.rs` | The line page, its routes and the web home behind it |

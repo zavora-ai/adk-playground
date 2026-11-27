@@ -7,16 +7,21 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use adk_core::{
-    DataDestination, DataLocality, Llm, LlmRequest, LlmResponse, LlmResponseStream, Part,
+    Content, DataDestination, DataLocality, Llm, LlmRequest, LlmResponse, LlmResponseStream, Part,
     SchemaAdapter,
 };
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+
+/// The agent's reply in `serve` to a question the recording has no answer for.
+pub const NOT_RECORDED: &str =
+    "This is a replay, and this answer was not recorded. Run with --live for a real answer.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -40,6 +45,8 @@ pub struct Tape {
     recorded: Mutex<Recorded>,
     counts: Mutex<HashMap<String, usize>>,
     spend: Mutex<BTreeMap<String, Spend>>,
+    /// An agent call the recording lacks gets [`NOT_RECORDED`] instead of an error.
+    explains_misses: AtomicBool,
 }
 
 /// What one role's model calls used, priced from adk-model's catalog.
@@ -73,7 +80,15 @@ impl Tape {
             recorded: Mutex::new(recorded),
             counts: Mutex::new(HashMap::new()),
             spend: Mutex::new(BTreeMap::new()),
+            explains_misses: AtomicBool::new(false),
         }))
+    }
+
+    /// From now on an agent call the recording lacks is answered with [`NOT_RECORDED`], so a
+    /// question or a decision's closing turn in `serve` never fails silently. A headless run
+    /// keeps the miss an error: it is the replay's determinism check.
+    pub fn explain_misses(&self) {
+        self.explains_misses.store(true, Ordering::Relaxed);
     }
 
     /// Writes what a live run recorded.
@@ -186,13 +201,31 @@ impl Llm for TapedLlm {
         let key = self.tape.key(self.role, &req);
         let responses = match self.tape.mode {
             Mode::Replay => {
-                let recorded = self.tape.recorded.lock().unwrap_or_else(|e| e.into_inner());
-                recorded.answers.get(&key).cloned().ok_or_else(|| {
-                    adk_core::AdkError::model(format!(
-                        "no recorded answer for {key}: this machine saw something the recording \
-                         did not; set ANTHROPIC_API_KEY to run live"
-                    ))
-                })?
+                let recorded = self
+                    .tape
+                    .recorded
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .answers
+                    .get(&key)
+                    .cloned();
+                match recorded {
+                    Some(responses) => responses,
+                    None if self.role == "agent"
+                        && self.tape.explains_misses.load(Ordering::Relaxed) =>
+                    {
+                        tracing::info!(tape.key = %key, "no recorded answer; replying that this is a replay");
+                        vec![LlmResponse::new(
+                            Content::new("model").with_text(NOT_RECORDED),
+                        )]
+                    }
+                    None => {
+                        return Err(adk_core::AdkError::model(format!(
+                            "no recorded answer for {key}: this machine saw something the \
+                             recording did not; set ANTHROPIC_API_KEY to run live"
+                        )));
+                    }
+                }
             }
             Mode::Live => {
                 let mut live = self.inner.generate_content(req, stream).await?;
@@ -239,7 +272,70 @@ impl Llm for TapedLlm {
 
 #[cfg(test)]
 mod tests {
-    use super::part_in;
+    use std::sync::Arc;
+
+    use adk_core::{Content, Llm, LlmRequest, LlmResponseStream};
+    use async_trait::async_trait;
+    use futures::StreamExt;
+
+    use super::{Mode, NOT_RECORDED, Tape, TapedLlm, part_in};
+
+    struct Unreachable;
+
+    #[async_trait]
+    impl Llm for Unreachable {
+        fn name(&self) -> &str {
+            "unreachable"
+        }
+
+        async fn generate_content(
+            &self,
+            _req: LlmRequest,
+            _stream: bool,
+        ) -> adk_core::Result<LlmResponseStream> {
+            Err(adk_core::AdkError::model("a replay never calls the model"))
+        }
+    }
+
+    fn empty_tape(name: &str) -> Arc<Tape> {
+        let path =
+            std::env::temp_dir().join(format!("line-inspector-{name}-{}.json", std::process::id()));
+        std::fs::write(&path, r#"{"answers":{}}"#).unwrap();
+        let tape = Tape::open(&path, Mode::Replay).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        tape
+    }
+
+    fn question() -> LlmRequest {
+        LlmRequest::new(
+            "claude-sonnet-5-5",
+            vec![Content::new("user").with_text("Why reject t002-p3?")],
+        )
+    }
+
+    #[tokio::test]
+    async fn a_miss_is_an_error_until_the_page_asks_for_replies() {
+        let tape = empty_tape("strict");
+        let agent = TapedLlm::new(Arc::new(Unreachable), Arc::clone(&tape), "agent");
+        assert!(agent.generate_content(question(), false).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn the_page_gets_a_reply_for_an_agent_miss_only() {
+        let tape = empty_tape("lenient");
+        tape.explain_misses();
+        let agent = TapedLlm::new(Arc::new(Unreachable), Arc::clone(&tape), "agent");
+        let responses: Vec<_> = agent
+            .generate_content(question(), false)
+            .await
+            .unwrap()
+            .collect()
+            .await;
+        let content = responses[0].as_ref().unwrap().content.clone().unwrap();
+        assert_eq!(content, Content::new("model").with_text(NOT_RECORDED));
+        let reasoner = TapedLlm::new(Arc::new(Unreachable), tape, "reasoner");
+        assert!(reasoner.generate_content(question(), false).await.is_err());
+    }
 
     #[test]
     fn finds_the_part_id() {

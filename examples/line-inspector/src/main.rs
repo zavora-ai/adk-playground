@@ -67,7 +67,8 @@ enum Command {
         #[arg(long, value_enum, default_value_t = CardMode::Hold)]
         cards: CardMode,
     },
-    /// The web home and the line page, the trays coming through at one a second
+    /// The line page, where the engineer starts the line, decides parts and asks about them;
+    /// the trays come through at one a second once started
     Serve {
         #[command(flatten)]
         common: Common,

@@ -97,6 +97,8 @@ pub struct Book {
     pub parts: Mutex<BTreeMap<String, Part>>,
     pub log: Mutex<Vec<String>>,
     pub trays_seen: Mutex<Vec<String>>,
+    /// Each reject's segmented defect, in the tray's pixels, for the part's crop on the page.
+    pub regions: Mutex<BTreeMap<String, Mask>>,
     borderline: mpsc::UnboundedSender<(Part, Vec<u8>)>,
 }
 
@@ -108,6 +110,7 @@ impl Book {
                 parts: Mutex::new(BTreeMap::new()),
                 log: Mutex::new(Vec::new()),
                 trays_seen: Mutex::new(Vec::new()),
+                regions: Mutex::new(BTreeMap::new()),
                 borderline: tx,
             }),
             rx,
@@ -282,6 +285,11 @@ impl ObservationSink for Line {
                             .as_ref()
                             .filter(|_| defective)
                             .map(|g| (iou(&mask, g, &cbox) * 100.0).round() / 100.0);
+                        self.book
+                            .regions
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .insert(part.id.clone(), mask);
                     }
                     Err(err) => {
                         tracing::warn!(part = %part.id, error = %err, "measuring the reject failed")
